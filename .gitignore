@@ -1,0 +1,15 @@
+# IDE Configuration
+.idea/
+.vs/
+.vscode/
+.editorconfig
+
+# Cmake Build
+cmake-build-*/
+build/
+out/
+bin/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile

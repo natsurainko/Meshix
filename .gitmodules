@@ -1,0 +1,3 @@
+[submodule "Vertix"]
+	path = Vertix
+	url = https://github.com/natsurainko/Vertix.git
