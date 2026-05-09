@@ -5,29 +5,18 @@
 #ifndef MESHIX_LIGHTVIEWDEPTHPASS_H
 #define MESHIX_LIGHTVIEWDEPTHPASS_H
 
-#include <Vertix/Rendering/DepthStencilView.h>
-#include <Vertix/Rendering/RenderPass.hpp>
+#include <Vertix/Rendering/RenderResourceView.h>
+#include <Vertix/Rendering/Pipeline/RenderPass.h>
 
 #include "Rendering/RenderContext.h"
 
 class ShadowGeometryPass : public Vertix::RenderPass<RenderContext> {
 public:
-    ~ShadowGeometryPass() override;
+    void Initialize(ID3D12Device10* device) override;
+    void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    void Initialize(
-        Vertix::GraphicsDevice *device,
-        RenderContext *context) override;
-
-    void Execute(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList5> &commandList) override;
-
+    const Vertix::RenderResourceView<Vertix::DepthStencil>* shadowDepthDSV;
 private:
-    Vertix::DepthStencilView* depthStencilView = nullptr;
-
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle{};
-    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle{};
-
-    D3D12_RESOURCE_BARRIER srvBarrier{};
-
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
 

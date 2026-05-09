@@ -6,26 +6,78 @@
 #define MESHIX_IMGUIPASS_H
 
 #include <imgui/imgui.h>
-#include <Vertix/Rendering/RenderPass.hpp>
+#include <imgui/backends/imgui_impl_dx12.h>
+#include <imgui/backends/imgui_impl_win32.h>
+#include <Vertix/Graphics/DescriptorHeap.h>
+#include <Vertix/Graphics/FrameCommandList.h>
+#include <Vertix/Rendering/RenderResourceView.h>
+#include <Vertix/Rendering/Pipeline/RenderPass.h>
+#include <Vertix/Windowing/GameWindow.h>
 
 #include "Rendering/RenderContext.h"
 
-static Vertix::DescriptorHeap* imguiSrvDescriptorHeap = nullptr;
+extern Vertix::DescriptorHeap* imguiSrvDescriptorHeap;
 
 class ImGuiPass : public Vertix::RenderPass<RenderContext> {
 public:
-    explicit ImGuiPass(const Vertix::GameWindow* window);
-    ~ImGuiPass() override;
+    explicit ImGuiPass(const Vertix::GameWindow* window) : swapChain(window->GetSwapChain()) {
+        if (ImGui::GetCurrentContext() != nullptr) {
+            io = &ImGui::GetIO();
+            return;
+        }
 
-    void Initialize(
-        Vertix::GraphicsDevice* device,
-        RenderContext* context) override;
+        const auto device = window->GetGraphicsDevice()->GetD3D12Device().Get();
+        const auto commandQueue = window->GetFrameCommandList()->GetD3D12CommandQueue().Get();
 
-    void Execute(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList5> &commandList) override;
+        imguiSrvDescriptorHeap = new Vertix::DescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2, true);
+
+        ImGui_ImplWin32_EnableDpiAwareness();
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        io = &ImGui::GetIO();
+        io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io->ConfigDebugIsDebuggerPresent = true;
+
+        ImGui::StyleColorsDark();
+
+        const float dpiScale = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY));
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.ScaleAllSizes(dpiScale);
+        style.FontScaleDpi = dpiScale;
+
+        ImGui_ImplWin32_Init(window->GetWindowHandle());
+
+        ImGui_ImplDX12_InitInfo init_info = {};
+        init_info.Device = device;
+        init_info.CommandQueue = commandQueue;
+        init_info.NumFramesInFlight = 2;
+        init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        init_info.DSVFormat = DXGI_FORMAT_UNKNOWN;
+
+        init_info.SrvDescriptorHeap = imguiSrvDescriptorHeap->GetDescriptorHeap().Get();
+        init_info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_handle) { return imguiSrvDescriptorHeap->AllocDescriptorHandle(*out_cpu_handle, *out_gpu_handle); };
+        init_info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo*, const D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE) { return imguiSrvDescriptorHeap->FreeDescriptorHandle(cpu_handle); };
+        ImGui_ImplDX12_Init(&init_info);
+    }
+
+    ~ImGuiPass() override {
+        if (ImGui::GetCurrentContext() == nullptr) return;
+
+        ImGui_ImplDX12_Shutdown();
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
+
+        delete imguiSrvDescriptorHeap;
+    }
+
+    void Initialize(ID3D12Device10* device) override {}
+    void Execute(ID3D12GraphicsCommandList5* commandList) override;
+
+    const Vertix::RenderResourceView<Vertix::RenderTarget>** currentFrameRTV = nullptr;
+
 private:
-    const Vertix::GameWindow *window;
     Vertix::SwapChain* swapChain;
-    ImGuiIO* io = nullptr;
+    ImGuiIO* io;
 };
 
 #endif //MESHIX_IMGUIPASS_H

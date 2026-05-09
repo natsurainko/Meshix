@@ -31,17 +31,6 @@ float2 RotateVector(float2 v, float c, float s) {
     return float2(v.x * c - v.y * s, v.x * s + v.y * c);
 }
 
-float3 ReconstructViewPosition(float2 texCoord, float linearDepth, float4x4 projection) {
-    float ndcX = mad(texCoord.x, 2.0, -1.0);
-    float ndcY = mad(texCoord.y, -2.0, 1.0);
-
-    return float3(
-        ndcX / projection._11 * linearDepth,
-        ndcY / projection._22 * linearDepth,
-        -linearDepth
-    );
-}
-
 float Falloff(float distSq, float negInvR2) {
     return saturate(distSq * negInvR2 + 1.0f);
 }
@@ -53,23 +42,25 @@ float ComputeAO(float3 P, float3 N, float3 S, float negInvR2) {
     return saturate(NdotV - HBAO_Bias) * Falloff(distSq, negInvR2);
 }
 
-float GetRadiusPixels(float linearDepth, float4x4 projection, float resolutionX) {
-    float focalLen     = projection._11;
+float GetRadiusPixels(float linearDepth, float projScaleX, float resolutionX) {
+    float focalLen     = projScaleX;
     float radiusPixels = HBAO_Radius * focalLen / linearDepth
                        * resolutionX * 0.5f;
 
     return min(radiusPixels, 128.0f);
 }
 
-float HBAO(float3 viewPos,
-           float3 viewNormal,
-           float2 texCoord,
-           float radiusPixels,
-           Texture2D<float4> gPostionDepth,
-           SamplerState pointSampler,
-           float4x4 projection,
-           float2 frameResolutionInverse,
-           float2 noisePixelPos) {
+float HBAO(
+    float3 viewPos,
+    float3 viewNormal,
+    float2 texCoord,
+    float  radiusPixels,
+    Texture2D<float> gDepth,
+    SamplerState pointSampler,
+    float4 nearFarProjScale,
+    float2 frameResolutionInverse,
+    float2 noisePixelPos)
+{
     float stepSizePixels = radiusPixels / float(HBAO_NUM_STEPS + 1);
     float negativeInvR2  = -1.0f / (HBAO_Radius * HBAO_Radius);
 
@@ -89,10 +80,10 @@ float HBAO(float3 viewPos,
         [unroll]
         for (int j = 0; j < HBAO_NUM_STEPS; ++j) {
             float2 sampleUV      = saturate(round(rayPixels * dir) * frameResolutionInverse + texCoord);
-            float  sampleDepth   = gPostionDepth.SampleLevel(pointSampler, sampleUV, 0).w;
+            float  sampleDepth   = gDepth.SampleLevel(pointSampler, sampleUV, 0);
 
-            if (sampleDepth > 0.0f) {
-                float3 sampleViewPos = ReconstructViewPosition(sampleUV, sampleDepth, projection);
+            if (sampleDepth < 1.0f) {
+                float3 sampleViewPos = ReconstructViewPosition(sampleUV, sampleDepth, nearFarProjScale);
                 AO += ComputeAO(viewPos, viewNormal, sampleViewPos, negativeInvR2);
             }
 

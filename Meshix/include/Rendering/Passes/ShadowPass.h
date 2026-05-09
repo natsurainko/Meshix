@@ -5,31 +5,22 @@
 #ifndef MESHIX_DIRECTIONALSHADOWPASS_H
 #define MESHIX_DIRECTIONALSHADOWPASS_H
 
-#include <Vertix/Rendering/RenderPass.hpp>
-#include <Vertix/Rendering/RenderTargetView.h>
+#include <Vertix/Rendering/RenderResourceView.h>
+#include <Vertix/Rendering/Pipeline/RenderPass.h>
 
 #include "Rendering/RenderContext.h"
 
 class ShadowPass : public Vertix::RenderPass<RenderContext> {
 public:
-    ~ShadowPass() override;
+    void Initialize(ID3D12Device10 *device) override;
+    void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    void Initialize(
-        Vertix::GraphicsDevice *device,
-        RenderContext *context) override;
-
-    void Execute(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList5> &commandList) override;
-    void Resize(const Vertix::Vector2D<unsigned> &size) override;
-
+    const Vertix::RenderResourceView<Vertix::ShaderResource>* gDepthSRV;
+    const Vertix::RenderResourceView<Vertix::ShaderResource>* gNormalSRV;
+    const Vertix::RenderResourceView<Vertix::ShaderResource>* shadowDepthSRV;
+    const Vertix::RenderResourceView<Vertix::RenderTarget>* shadowMaskRTV;
 private:
-    Vertix::RenderTargetView* renderTargetView = nullptr;
-
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle{};
-    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle{};
-
-    D3D12_RESOURCE_BARRIER srvBarrier{};
-    D3D12_RESOURCE_BARRIER srvToDsvBarrier{};
-    D3D12_RESOURCE_BARRIER dsvToSrvBarrier{};
+    ID3D12DescriptorHeap* descriptorHeap = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;

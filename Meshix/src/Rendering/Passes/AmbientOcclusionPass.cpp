@@ -7,38 +7,11 @@
 #include <AmbientOcclusionPass_PS.h>
 #include <AmbientOcclusionPass_VS.h>
 
-AmbientOcclusionPass::~AmbientOcclusionPass() {
-    delete renderTargetView;
-}
-
-void AmbientOcclusionPass::Initialize(
-    Vertix::GraphicsDevice *device,
-    RenderContext *context)
-{
-    RenderPass::Initialize(device, context);
-    const auto &d3d12Device = device->GetD3D12Device();
-
+void AmbientOcclusionPass::Initialize(ID3D12Device10* device) {
     {
-        renderContext->rtvDescriptorHeap.AllocDescriptorHandle(rtvHandle);
-        renderContext->srvDescriptorHeap.AllocDescriptorHandle(srvHandle, renderContext->ambientOcclusionSrvGpuHandle);
-    }
-
-    {
-        auto rtvResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT,context->windowSize.X, context->windowSize.Y);
-        constexpr auto clearValue = D3D12_CLEAR_VALUE{ .Color = { 1.0f, 1.0f, 1.0f, 1.0f } };
-        const auto srvDesc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT, 1);
-        rtvResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-
-        renderTargetView = new Vertix::RenderTargetView(graphicsDevice, rtvResourceDesc, rtvHandle, nullptr, clearValue);
-        renderTargetView->CreateShaderResourceView(&srvDesc, srvHandle);
-
-        renderContext->ambientOcclusionRtvBarrier = renderTargetView->CreateTransitionBarrier(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        srvBarrier = renderTargetView->CreateTransitionBarrier(D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    }
-
-    {
-        CD3DX12_DESCRIPTOR_RANGE srvRanges[1];
-        srvRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
+        CD3DX12_DESCRIPTOR_RANGE srvRanges[2];
+        srvRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+        srvRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
 
         CD3DX12_STATIC_SAMPLER_DESC pointSampler(0);
         pointSampler.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
@@ -46,12 +19,13 @@ void AmbientOcclusionPass::Initialize(
         pointSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
         pointSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 
-        CD3DX12_ROOT_PARAMETER rootParameters[2];
+        CD3DX12_ROOT_PARAMETER rootParameters[3];
         rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
         rootParameters[1].InitAsDescriptorTable(1, &srvRanges[0], D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParameters[2].InitAsDescriptorTable(1, &srvRanges[1], D3D12_SHADER_VISIBILITY_PIXEL);
 
         D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
-        rootSignatureDesc.NumParameters = 2;
+        rootSignatureDesc.NumParameters = 3;
         rootSignatureDesc.pParameters = rootParameters;
         rootSignatureDesc.NumStaticSamplers = 1;
         rootSignatureDesc.pStaticSamplers = &pointSampler;
@@ -61,7 +35,7 @@ void AmbientOcclusionPass::Initialize(
         Microsoft::WRL::ComPtr<ID3DBlob> error;
 
         ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-        ThrowIfFailed(d3d12Device->CreateRootSignature(0,
+        ThrowIfFailed(device->CreateRootSignature(0,
             signature->GetBufferPointer(),
             signature->GetBufferSize(),
             IID_PPV_ARGS(&rootSignature)));
@@ -74,6 +48,20 @@ void AmbientOcclusionPass::Initialize(
             { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, offsetof(Vertix::Vertex, TexCoord), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         };
 
+        D3D12_RENDER_TARGET_BLEND_DESC blendDesc = {};
+        blendDesc.BlendEnable    = TRUE;
+        blendDesc.LogicOpEnable  = FALSE;
+
+        blendDesc.SrcBlend       = D3D12_BLEND_DEST_COLOR;
+        blendDesc.DestBlend      = D3D12_BLEND_ZERO;
+        blendDesc.BlendOp        = D3D12_BLEND_OP_ADD;
+
+        blendDesc.SrcBlendAlpha  = D3D12_BLEND_ZERO;
+        blendDesc.DestBlendAlpha = D3D12_BLEND_ONE;
+        blendDesc.BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+
+        blendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED;
+
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
         psoDesc.InputLayout = { inputElementDesc, _countof(inputElementDesc) };
         psoDesc.pRootSignature = rootSignature.Get();
@@ -81,48 +69,34 @@ void AmbientOcclusionPass::Initialize(
         psoDesc.PS = SHADER_BYTECODE(SHADER_BYTECODE_AMBIENT_OCCLUSION_PASS_PS);
         psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+        psoDesc.BlendState.AlphaToCoverageEnable  = FALSE;
+        psoDesc.BlendState.IndependentBlendEnable = FALSE;
+        psoDesc.BlendState.RenderTarget[0]        = blendDesc;
         psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC2(D3D12_DEFAULT);
         psoDesc.DepthStencilState.DepthEnable = FALSE;
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        psoDesc.RTVFormats[0] = DXGI_FORMAT_R16_FLOAT;
+        psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         psoDesc.NumRenderTargets = 1;
         psoDesc.SampleDesc.Count = 1;
         psoDesc.SampleMask = UINT_MAX;
-        ThrowIfFailed(d3d12Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState)));
+        ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState)));
     }
+
+    descriptorHeap = gDepthSRV->GetHeap()->GetDescriptorHeap().Get();
 }
 
-void AmbientOcclusionPass::Execute(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList5> &commandList) {
-    constexpr float clearColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+void AmbientOcclusionPass::Execute(ID3D12GraphicsCommandList5* commandList) {
+    if (!renderContext->EnableHBAO) return;
 
-    if (!renderContext->EnableHBAO) {
-        commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-        commandList->ResourceBarrier(1, &srvBarrier);
-        return;
-    }
-
-    commandList->SetDescriptorHeaps(1, renderContext->srvDescriptorHeap.GetDescriptorHeap().GetAddressOf());
+    commandList->SetDescriptorHeaps(1, &descriptorHeap);
     commandList->SetGraphicsRootSignature(rootSignature.Get());
     commandList->SetGraphicsRootConstantBufferView(0, renderContext->frameConstantsBuffer.GetGpuVirtualAddress());
-    commandList->SetGraphicsRootDescriptorTable(1, renderContext->geometrySrvGpuHandles[0]);
+    gDepthSRV->SetGraphicsRootDescriptorTable(commandList, 1);
+    gNormalSRV->SetGraphicsRootDescriptorTable(commandList, 2);
 
-    commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
-    commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+    gORMRTV->SetRenderTarget(commandList);
     commandList->SetPipelineState(pipelineState.Get());
-
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     commandList->IASetVertexBuffers(0, 1, &renderContext->fullScreenVertex->d3d12VertexBufferView);
     commandList->DrawInstanced(renderContext->fullScreenVertex->vertexCount, 1, 0, 0);
-
-    commandList->ResourceBarrier(1, &srvBarrier);
-}
-
-void AmbientOcclusionPass::Resize(const Vertix::Vector2D<unsigned> &size) {
-    const auto srvDesc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT);
-
-    renderTargetView->Resize(size);
-    renderTargetView->CreateShaderResourceView(&srvDesc, srvHandle);
-
-    renderContext->ambientOcclusionRtvBarrier = renderTargetView->CreateTransitionBarrier(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    srvBarrier = renderTargetView->CreateTransitionBarrier(D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }

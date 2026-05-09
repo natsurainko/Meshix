@@ -1,5 +1,6 @@
 #include "../structures.h"
 #include "../noise.hlsli"
+#include "../depth.hlsli"
 #include "../hbao.hlsli"
 
 // ====================================================
@@ -31,27 +32,30 @@ ConstantBuffer<FrameConstants> frameConstants : register(b0);
 
 SamplerState PointSampler : register(s0);
 
-Texture2D<float4> gPositionDepth   : register(t0);
-Texture2D<float4> gNormalRoughness : register(t1);
+Texture2D<float>  gDepth  : register(t0);
+Texture2D<float4> gNormal : register(t1);
 
-float PSMain(VSOutput input) : SV_TARGET0 {
-    float linearDepth = gPositionDepth.SampleLevel(PointSampler, input.TexCoord, 0).w;
-    if (linearDepth <= 0.0f) return 1.0f;
+float4 PSMain(VSOutput input) : SV_TARGET {
+    float depth = gDepth.SampleLevel(PointSampler, input.TexCoord, 0).r;
+    if (depth == 1.0f) return float4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    float3 viewPos    = ReconstructViewPosition(input.TexCoord, linearDepth, frameConstants.Projection);
-    float3 fragNormal = gNormalRoughness.SampleLevel(PointSampler, input.TexCoord, 0).xyz;
+    float  linearDepth;
+    float3 viewPos    = ReconstructViewPosition(input.TexCoord, depth, frameConstants.NearFarProjScale, linearDepth);
+    float3 fragNormal = gNormal.SampleLevel(PointSampler, input.TexCoord, 0).xyz;
     float3 viewNormal = normalize(mul((float3x3)frameConstants.View, fragNormal));
 
-    float radiusPixels = GetRadiusPixels(linearDepth, frameConstants.Projection, frameConstants.FrameResolution.x);
-    if (radiusPixels < 1.0f) return 1.0f;
+    float radiusPixels = GetRadiusPixels(linearDepth, frameConstants.NearFarProjScale.z, frameConstants.FrameResolution.x);
+    if (radiusPixels < 1.0f) return float4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    return HBAO(viewPos,
-                viewNormal,
-                input.TexCoord,
-                radiusPixels,
-                gPositionDepth,
-                PointSampler,
-                frameConstants.Projection,
-                frameConstants.FrameResolutionInverse,
-                input.Position.xy);
+    float ao = HBAO(viewPos,
+        viewNormal,
+        input.TexCoord,
+        radiusPixels,
+        gDepth,
+        PointSampler,
+        frameConstants.NearFarProjScale,
+        frameConstants.FrameResolutionInverse,
+        input.Position.xy);
+
+    return float4(ao, 1.0f, 1.0f, 1.0f);
 }

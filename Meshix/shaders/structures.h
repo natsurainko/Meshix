@@ -35,11 +35,14 @@ struct CascadeShadowConstants {
 #endif
 
 struct FrameConstants {
-    float4x4 View           IDENTITY;
-    float4x4 Projection     IDENTITY;
-    float4x4 ViewProjection IDENTITY;
+    float4x4 View                  IDENTITY;
+    float4x4 Projection            IDENTITY;
+    float4x4 ViewProjection        IDENTITY;
+
+    float4x4 ViewProjectionInverse IDENTITY;
 
     float4 CameraPosition;
+    float4 NearFarProjScale;
 
     float2 FrameResolution;
     float2 FrameResolutionInverse;

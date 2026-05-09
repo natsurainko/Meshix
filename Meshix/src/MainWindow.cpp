@@ -5,13 +5,113 @@
 #include "MainWindow.h"
 
 #include <filesystem>
+#include <Vertix/Rendering/Pipeline/RenderPipelineBuilder.h>
 #include <Vertix.Engine/Content/ModelLoader.h>
 #include <Vertix.Engine/Content/TextureLoader.h>
 #include <Vertix.Engine/Primitive/DefaultPBRMaterial.h>
 
+#include "Rendering/Passes/AmbientOcclusionPass.h"
+#include "Rendering/Passes/GeometryPass.h"
+#include "Rendering/Passes/ImGuiPass.h"
+#include "Rendering/Passes/LightingPass.h"
+#include "Rendering/Passes/ShadowGeometryPass.h"
+#include "Rendering/Passes/ShadowPass.h"
+
+void MainWindow::BuildRenderPipeline() {
+    const auto windowSize = GetWindowSize();
+
+    renderContext = std::make_unique<RenderContext>(graphicsDevice, frameCommandList);
+    renderContext->SetWindowSize(windowSize);
+
+    Vertix::RenderPipelineBuilder renderPipelineBuilder { graphicsDevice, frameCommandList, renderContext.get() };
+    {
+        // Configure SwapChain
+        renderPipelineBuilder.SwapChain.swapChainPtr = swapChain;
+        renderPipelineBuilder.SwapChain.frameRTVDesc = D3D12_RENDER_TARGET_VIEW_DESC {
+            .Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+            .ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D,
+        };
+
+        constexpr auto depthClearValue = D3D12_CLEAR_VALUE { .Format = DXGI_FORMAT_D32_FLOAT, .DepthStencil = { .Depth = 1.0f, .Stencil = 0 } };
+
+        renderPipelineBuilder.Textures.Add<Vertix::DrawColorSampleAccessor>("GBuffer.Normal", CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_R16G16B16A16_FLOAT, VERTIX_VECTOR2D_EXPAND(windowSize)));
+        renderPipelineBuilder.Textures.Add<Vertix::DrawColorSampleAccessor>("GBuffer.Albedo", CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, VERTIX_VECTOR2D_EXPAND(windowSize)));
+        renderPipelineBuilder.Textures.Add<Vertix::DrawColorSampleAccessor>("GBuffer.OcclusionRoughnessMetallic", CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_R8G8B8A8_UNORM, VERTIX_VECTOR2D_EXPAND(windowSize)));
+        renderPipelineBuilder.Textures.Add<Vertix::DrawDepthSampleAccessor>("GBuffer.Depth", CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_R32_TYPELESS, VERTIX_VECTOR2D_EXPAND(windowSize)), true, &depthClearValue);
+
+        renderPipelineBuilder.Textures.Add<Vertix::DrawDepthSampleAccessor>("Shadow.Depth", CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_R32_TYPELESS, renderContext->ShadowMapSize, renderContext->ShadowMapSize, CASCADE_NUM), false, &depthClearValue);
+        renderPipelineBuilder.Textures.Add<Vertix::DrawColorSampleAccessor>("Shadow.Mask", CD3DX12_RESOURCE_DESC::Tex2D(
+            DXGI_FORMAT_R16_FLOAT, VERTIX_VECTOR2D_EXPAND(windowSize)));
+
+        D3D12_DEPTH_STENCIL_VIEW_DESC gDepthDSVDesc {};
+        gDepthDSVDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        gDepthDSVDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+        gDepthDSVDesc.Texture2D.MipSlice = 0;
+
+        D3D12_DEPTH_STENCIL_VIEW_DESC shadowDepthDSVDesc {};
+        shadowDepthDSVDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        shadowDepthDSVDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+        shadowDepthDSVDesc.Texture2DArray.ArraySize = CASCADE_NUM;
+        shadowDepthDSVDesc.Texture2DArray.FirstArraySlice = 0;
+        shadowDepthDSVDesc.Texture2DArray.MipSlice = 0;
+
+        renderPipelineBuilder.Views.AddExplicit<Vertix::DepthStencil>("GBuffer.Depth.DSV", "GBuffer.Depth", gDepthDSVDesc);
+        renderPipelineBuilder.Views.AddExplicit<Vertix::ShaderResource>("GBuffer.Depth.SRV", "GBuffer.Depth",
+            CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2DArray(DXGI_FORMAT_R32_FLOAT));
+
+        renderPipelineBuilder.Views.AddExplicit<Vertix::DepthStencil>("Shadow.Depth.DSV", "Shadow.Depth", shadowDepthDSVDesc);
+        renderPipelineBuilder.Views.AddExplicit<Vertix::ShaderResource>("Shadow.Depth.SRV", "Shadow.Depth",
+            CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2DArray(DXGI_FORMAT_R32_FLOAT, CASCADE_NUM, 1));
+
+        renderPipelineBuilder.Passes.Add<GeometryPass>([](auto &builder) { builder
+            .DeclareWrite("GBuffer.Normal", &GeometryPass::gNormalRTV)
+            .DeclareWrite("GBuffer.Albedo", &GeometryPass::gAlbedoRTV)
+            .DeclareWrite("GBuffer.OcclusionRoughnessMetallic", &GeometryPass::gORMRTV)
+            .template DeclareWriteExplicit<Vertix::DepthStencil>("GBuffer.Depth.DSV", D3D12_RESOURCE_STATE_DEPTH_WRITE, &GeometryPass::gDepthDSV);
+        });
+
+        renderPipelineBuilder.Passes.Add<AmbientOcclusionPass>([](auto &builder) { builder
+            .template DeclareReadExplicit<Vertix::ShaderResource>("GBuffer.Depth.SRV", D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &AmbientOcclusionPass::gDepthSRV)
+            .DeclareRead("GBuffer.Normal", &AmbientOcclusionPass::gNormalSRV)
+            .DeclareWrite("GBuffer.OcclusionRoughnessMetallic", &AmbientOcclusionPass::gORMRTV);
+        });
+
+        renderPipelineBuilder.Passes.Add<ShadowGeometryPass>([] (auto &builder) { builder
+            .template DeclareWriteExplicit<Vertix::DepthStencil>("Shadow.Depth.DSV", D3D12_RESOURCE_STATE_DEPTH_WRITE, &ShadowGeometryPass::shadowDepthDSV);
+        });
+
+        renderPipelineBuilder.Passes.Add<ShadowPass>([] (auto &builder) { builder
+            .template DeclareReadExplicit<Vertix::ShaderResource>("Shadow.Depth.SRV", D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &ShadowPass::shadowDepthSRV)
+            .DeclareRead("GBuffer.Normal", &ShadowPass::gNormalSRV)
+            .template DeclareReadExplicit<Vertix::ShaderResource>("GBuffer.Depth.SRV", D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &ShadowPass::gDepthSRV)
+            .DeclareWrite("Shadow.Mask", &ShadowPass::shadowMaskRTV);
+        });
+
+        renderPipelineBuilder.Passes.Add<LightingPass>([](auto &builder) { builder
+            .DeclareRead("GBuffer.Normal", &LightingPass::gNormalSRV)
+            .DeclareRead("GBuffer.Albedo", &LightingPass::gAlbedoSRV)
+            .DeclareRead("GBuffer.OcclusionRoughnessMetallic", &LightingPass::gORMSRV)
+            .template DeclareReadExplicit<Vertix::ShaderResource>("GBuffer.Depth.SRV", D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &LightingPass::gDepthSRV)
+            .DeclareRead("Shadow.Mask", &LightingPass::shadowMaskSRV)
+            .DeclareSwapChainWrite(&LightingPass::currentFrameRTV);
+        });
+
+        renderPipelineBuilder.Passes.Add<ImGuiPass>([](auto &builder) { builder
+            .DeclareSwapChainWrite(&ImGuiPass::currentFrameRTV);
+        }, this);
+    }
+    renderPipeline = renderPipelineBuilder.Build();
+    renderContext->viewport    = renderPipeline->GetD3D12Viewport();
+    renderContext->scissorRect = renderPipeline->GetD3D12ScissorRect();
+}
+
 void MainWindow::OnInitialize() {
-    renderPipeline = new RenderPipeline(graphicsDevice, frameCommandList, this);
-    renderContext = renderPipeline->GetRenderContext();
+    BuildRenderPipeline();
     imGuiIO = &ImGui::GetIO();
 
     defaultPositionController.AttachObject(renderContext->GetPerspectiveCamera());
@@ -20,14 +120,8 @@ void MainWindow::OnInitialize() {
     defaultPositionController.Speed *= 3.0;
     defaultRotationController.Sensitivity *= 1.5;
 
-    graphicsDevice->CreateCommandQueue(copyCommandQueue, {
-        .Type = D3D12_COMMAND_LIST_TYPE_COPY,
-        .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE
-    });
-    graphicsDevice->CreateCommandQueue(computeCommandQueue, {
-        .Type = D3D12_COMMAND_LIST_TYPE_COMPUTE,
-        .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE
-    });
+    graphicsDevice->CreateCommandQueue(copyCommandQueue, { .Type = D3D12_COMMAND_LIST_TYPE_COPY, .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE });
+    graphicsDevice->CreateCommandQueue(computeCommandQueue, { .Type = D3D12_COMMAND_LIST_TYPE_COMPUTE, .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE });
 
     // https://github.com/qian-o/GLTF-Assets/tree/main/Bistro
     const auto directory = std::filesystem::path("F:\\GLTF-Assets-main\\Bistro");
@@ -90,7 +184,6 @@ void MainWindow::OnRender(const double deltaTime) {
 
     dispatcherQueue.FlushQueue();
     renderContext->materialPool.FlushDirty();
-
     renderPipeline->Execute();
 }
 
@@ -107,6 +200,7 @@ void MainWindow::OnUpdate(const double deltaTime) {
 }
 
 void MainWindow::OnResized(const Vertix::Vector2D<unsigned> &size) {
+    renderContext->SetWindowSize(size);
     renderPipeline->Resize(size);
 }
 

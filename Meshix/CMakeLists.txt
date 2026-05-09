@@ -8,7 +8,6 @@ target_sources(Meshix
         src/Rendering/Passes/ImGuiPass.cpp
         src/Rendering/Passes/LightingPass.cpp
         src/Rendering/Passes/AmbientOcclusionPass.cpp
-        src/Rendering/RenderPipeline.cpp
         src/MainWindow.cpp
         src/Main.cpp
     PUBLIC
@@ -19,7 +18,6 @@ target_sources(Meshix
 
             include/Controlling/KeyboardControllerInput.h
             include/Controlling/MouseControllerInput.h
-            include/Rendering/RenderPipeline.h
             include/Rendering/RenderContext.h
             include/Rendering/Passes/GeometryPass.h
             include/Rendering/Passes/ShadowGeometryPass.h
@@ -36,6 +34,7 @@ set(HLSL_SHADER_FILES
         shaders/pbr.hlsli
         shaders/pcss.hlsli
         shaders/poisson.hlsli
+        shaders/depth.hlsli
 
         shaders/passes/AmbientOcclusionPass.hlsl
         shaders/passes/GeometryPass.hlsl

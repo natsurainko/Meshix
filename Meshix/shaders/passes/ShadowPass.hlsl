@@ -1,6 +1,7 @@
 #include "../structures.h"
 #include "../noise.hlsli"
 #include "../csm.hlsli"
+#include "../depth.hlsli"
 
 #define POISSON_16
 #include "../poisson.hlsli"
@@ -33,17 +34,13 @@ VSOutput VSMain(VSInput vsInput) {
 
 ConstantBuffer<LightConstants>         lightConstants         : register(b0);
 ConstantBuffer<CascadeShadowConstants> cascadeShadowConstants : register(b1);
+ConstantBuffer<FrameConstants>         frameConstants         : register(b2);
 
-cbuffer Constants : register(b2)
-{
-    float2 ShadowMapTexelSize;
-}
+SamplerState NearestSampler : register(s0);
 
-SamplerState           NearestSampler      : register(s0);
-
-Texture2D<float4>     gPositionDepth   : register(t0);
-Texture2D<float4>     gNormalRoughness : register(t1);
-Texture2DArray<float> ShadowMap        : register(t2);
+Texture2D<float>      gDepth      : register(t0);
+Texture2D<float4>     gNormal     : register(t1);
+Texture2DArray<float> ShadowDepth : register(t2);
 
 // static const float kBias[CASCADE_NUM] = { 3.5, 1.5, 1.0, 1.0, 1.0 };
 
@@ -76,26 +73,28 @@ float3 GetBiasNormalOffset(float3 N, float NdotL) {
 */
 
 float PSMain(VSOutput psInput) : SV_TARGET0 {
-    float4 positionDepth = gPositionDepth.SampleLevel(NearestSampler, psInput.TexCoord, 0);
-    if (positionDepth.w <= 0) return 0;
+    float depth = gDepth.SampleLevel(NearestSampler, psInput.TexCoord, 0);
+    if (depth == 1.0) return 0;
+    float  linearDepth  = LinearizeDepth(depth, frameConstants.NearFarProjScale);
+    float3 fragPosition = ReconstructWorldPosition(psInput.TexCoord, depth, frameConstants.ViewProjectionInverse);
 
 	uint        layer;
 	float4      shadowCoords;
 	CascadeData cascadeData;
-    FastSelectCascadeLayer(positionDepth.w, cascadeShadowConstants.CascadeDatas, layer, cascadeData);
+    FastSelectCascadeLayer(linearDepth, cascadeShadowConstants.CascadeDatas, layer, cascadeData);
 
-    float3 normal = gNormalRoughness.SampleLevel(NearestSampler, psInput.TexCoord, 0).rgb;
+    float3 normal = gNormal.SampleLevel(NearestSampler, psInput.TexCoord, 0).xyz;
 	float  NdotL  = clamp(dot(normal, -lightConstants.LightDirection.xyz), 0.0, 1.0);
 
 	float  pcfBias = CalculateShadowBias(NdotL); // * kBias[layer];
 	// float3 normalOffset = GetBiasNormalOffset(normal, NdotL);
 
 	// positionDepth.xyz += normalOffset;
-	SelectCascadeLayer(positionDepth, cascadeShadowConstants.CascadeDatas, layer, shadowCoords, cascadeData);
+	SelectCascadeLayer(float4(fragPosition, linearDepth), cascadeShadowConstants.CascadeDatas, layer, shadowCoords, cascadeData);
 
 	shadowCoords.z -= (1e-4f + pcfBias) / cascadeData.RadiusScale * cascadeData.ZStartBiasScale;
 
-    return PCSS(ShadowMap,
+    return PCSS(ShadowDepth,
                 NearestSampler,
                 layer,
                 shadowCoords.xyz,

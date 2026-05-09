@@ -10,45 +10,7 @@
 #include <Vertix/Exceptions/HResultException.h>
 #include <Vertix/Graphics/GraphicsDevice.h>
 
-GeometryPass::~GeometryPass() {
-    delete depthStencilView;
-
-    for (const auto &renderTargetView : renderTargetViews) {
-        delete renderTargetView;
-    }
-}
-
-void GeometryPass::Initialize(
-    Vertix::GraphicsDevice* device,
-    RenderContext *context)
-{
-    RenderPass::Initialize(device, context);
-    const auto &d3d12Device = device->GetD3D12Device();
-
-    {
-        renderContext->rtvDescriptorHeap.AllocDescriptorHandle(rtvHandles, renderTargetFormats.size());
-        renderContext->dsvDescriptorHeap.AllocDescriptorHandle(dsvHandle);
-        renderContext->srvDescriptorHeap.AllocDescriptorHandle(srvHandles, renderContext->geometrySrvGpuHandles, renderTargetFormats.size());
-    }
-
-    {
-        auto dsvResDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D24_UNORM_S8_UINT,context->windowSize.X, context->windowSize.Y);
-        dsvResDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-        depthStencilView = new Vertix::DepthStencilView(graphicsDevice, dsvResDesc, dsvHandle);
-
-        for (int i = 0; i < renderTargetFormats.size(); i++) {
-            const auto& format = renderTargetFormats[i];
-            auto rtvResDesc = CD3DX12_RESOURCE_DESC::Tex2D(format,context->windowSize.X, context->windowSize.Y);
-            auto srvDesc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(format, 1);
-            rtvResDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-
-            renderTargetViews[i] = new Vertix::RenderTargetView(graphicsDevice, rtvResDesc, rtvHandles[i]);
-            renderTargetViews[i]->CreateShaderResourceView(&srvDesc, srvHandles[i]);
-            renderContext->geometryRtvBarriers[i] = renderTargetViews[i]->CreateTransitionBarrier(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-            srvBarriers[i] = renderTargetViews[i]->CreateTransitionBarrier(D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        }
-    }
-
+void GeometryPass::Initialize(ID3D12Device10* device) {
     {
         CD3DX12_STATIC_SAMPLER_DESC staticSampler(0);
         staticSampler.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
@@ -79,7 +41,7 @@ void GeometryPass::Initialize(
         Microsoft::WRL::ComPtr<ID3DBlob> error;
 
         ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-        ThrowIfFailed(d3d12Device->CreateRootSignature(0,
+        ThrowIfFailed(device->CreateRootSignature(0,
             signature->GetBufferPointer(),
             signature->GetBufferSize(),
             IID_PPV_ARGS(&rootSignature)));
@@ -104,20 +66,20 @@ void GeometryPass::Initialize(
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
         psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC2(D3D12_DEFAULT);
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
         psoDesc.SampleDesc.Count = 1;
         psoDesc.SampleMask = UINT_MAX;
 
-        psoDesc.NumRenderTargets = renderTargetFormats.size();
-        for (int i = 0; i < renderTargetFormats.size(); i++) {
-            psoDesc.RTVFormats[i] = renderTargetFormats[i];
-        }
+        psoDesc.NumRenderTargets = 3;
+        psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        psoDesc.RTVFormats[1] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-        ThrowIfFailed(d3d12Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState)));
+        ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState)));
     }
 }
 
-void GeometryPass::Execute(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList5> &commandList) {
+void GeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     constexpr float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
     commandList->SetDescriptorHeaps(1, renderContext->texturePool.GetDescriptorHeap().GetAddressOf());
@@ -125,11 +87,17 @@ void GeometryPass::Execute(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLis
     commandList->SetGraphicsRootConstantBufferView(0, renderContext->frameConstantsBuffer.GetGpuVirtualAddress());
     commandList->SetGraphicsRootShaderResourceView(3, renderContext->materialPool.GetGpuVirtualAddress());
 
-    commandList->OMSetRenderTargets(renderTargetFormats.size(), &rtvHandles[0], FALSE, &dsvHandle);
-    commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH , 1.0f, 0, 0, nullptr);
-    for (const auto rtvHandle : rtvHandles) {
-        commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-    }
+    const D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[3] = {
+        gNormalRTV->GetHandle(),
+        gAlbedoRTV->GetHandle(),
+        gORMRTV->GetHandle(),
+    };
+    commandList->OMSetRenderTargets(3, rtvHandles, FALSE, gDepthDSV->GetHandleAddress());
+
+    gNormalRTV->Clear(commandList, clearColor);
+    gAlbedoRTV->Clear(commandList, clearColor);
+    gORMRTV->Clear(commandList, clearColor);
+    gDepthDSV->ClearDepth(commandList, 1.0f);
 
     commandList->SetPipelineState(pipelineState.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -152,21 +120,5 @@ void GeometryPass::Execute(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLis
             commandList->IASetIndexBuffer(&mesh.IndexBuffer->d3d12IndexBufferView);
             commandList->DrawIndexedInstanced(mesh.IndexBuffer->indexCount, 1, 0, 0, 0);
         }
-    }
-
-    commandList->ResourceBarrier(renderTargetFormats.size(), srvBarriers);
-}
-
-void GeometryPass::Resize(const Vertix::Vector2D<unsigned> &size) {
-    depthStencilView->Resize(size);
-
-    for (int i = 0; i < renderTargetFormats.size(); i++) {
-        const auto& format = renderTargetFormats[i];
-        auto srvDesc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(format, 1);
-
-        renderTargetViews[i]->Resize(size);
-        renderTargetViews[i]->CreateShaderResourceView(&srvDesc, srvHandles[i]);
-        renderContext->geometryRtvBarriers[i] = renderTargetViews[i]->CreateTransitionBarrier(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        srvBarriers[i] = renderTargetViews[i]->CreateTransitionBarrier(D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     }
 }

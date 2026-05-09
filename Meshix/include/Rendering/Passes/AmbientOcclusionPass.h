@@ -5,29 +5,21 @@
 #ifndef MESHIX_AMBIENTOCCLUSIONPASS_H
 #define MESHIX_AMBIENTOCCLUSIONPASS_H
 
-#include <Vertix/Rendering/RenderPass.hpp>
-#include <Vertix/Rendering/RenderTargetView.h>
+#include <Vertix/Rendering/RenderResourceView.h>
+#include <Vertix/Rendering/Pipeline/RenderPass.h>
 
 #include "Rendering/RenderContext.h"
 
 class AmbientOcclusionPass : public Vertix::RenderPass<RenderContext> {
 public:
-    ~AmbientOcclusionPass() override;
+    void Initialize(ID3D12Device10* device) override;
+    void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    void Initialize(
-        Vertix::GraphicsDevice* device,
-        RenderContext* context) override;
-
-    void Execute(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList5> &commandList) override;
-    void Resize(const Vertix::Vector2D<unsigned> &size) override;
-
+    const Vertix::RenderResourceView<Vertix::ShaderResource>* gDepthSRV;
+    const Vertix::RenderResourceView<Vertix::ShaderResource>* gNormalSRV;
+    const Vertix::RenderResourceView<Vertix::RenderTarget>* gORMRTV;
 private:
-    Vertix::RenderTargetView* renderTargetView = nullptr;
-
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle{};
-    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle{};
-
-    D3D12_RESOURCE_BARRIER srvBarrier{};
+    ID3D12DescriptorHeap* descriptorHeap = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;

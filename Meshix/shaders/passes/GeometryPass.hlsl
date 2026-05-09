@@ -16,7 +16,6 @@ struct VSInput {
 };
 
 struct VSOutput {
-    float4 FragPos    : POSITION;
     float3 FragNormal : NORMAL;
     float3 Tangent    : TANGENT0;
     float3 Bitangent  : TANGENT1;
@@ -25,16 +24,12 @@ struct VSOutput {
 };
 
 VSOutput VSMain(VSInput vsInput) {
-    float4 worldPos = mul(objectConstants.World, float4(vsInput.Position, 1.0f));
-    float4 viewPos  = mul(frameConstants.View, worldPos);
-
     VSOutput output;
-    output.FragPos    = float4(worldPos.xyz, -viewPos.z);
     output.FragNormal = mul((float3x3)objectConstants.WorldInverseTranspose, vsInput.Normal);
     output.Tangent    = mul((float3x3)objectConstants.WorldInverseTranspose, vsInput.Tangent);
     output.Bitangent  = mul((float3x3)objectConstants.WorldInverseTranspose, vsInput.Bitangent);
     output.TexCoord   = vsInput.TexCoord;
-    output.Position   = mul(frameConstants.Projection, viewPos);
+    output.Position   = mul(frameConstants.ViewProjection, mul(objectConstants.World, float4(vsInput.Position, 1.0f)));
     return output;
 }
 
@@ -60,10 +55,9 @@ MaterialConstants GetMaterial(uint handle) {
 }
 
 struct PSOutput {
-    float4 GPositionDepth   : SV_Target0;
-    float4 GNormalRoughness : SV_Target1;
-    float4 GAlbedoMetallic  : SV_Target2;
-    float  GAo              : SV_Target3;
+    float4 GNormal : SV_Target0;
+    float4 GAlbedo : SV_Target1;
+    float4 GORM    : SV_Target2;
 };
 
 PSOutput PSMain(VSOutput psInput) {
@@ -88,10 +82,10 @@ PSOutput PSMain(VSOutput psInput) {
             if (material.alphaMode && baseColor.a <= material.alphaCutoff) discard;
         }
         if (material.metallicRoughnessHandle) {
-            Texture2D<float3> tMetallicRoughness = GetTexture<Texture2D<float3> >(material.metallicRoughnessHandle);
-            float2 metallicRoughness = tMetallicRoughness.Sample(AnisotropicSampler, psInput.TexCoord).gb;
-            roughness *= metallicRoughness.x;
-            metallic  *= metallicRoughness.y;
+            Texture2D<float3> tRoughnessMetallic = GetTexture<Texture2D<float3> >(material.metallicRoughnessHandle);
+            float2 roughnessMetallic = tRoughnessMetallic.Sample(AnisotropicSampler, psInput.TexCoord).gb;
+            roughness *= roughnessMetallic.x;
+            metallic  *= roughnessMetallic.y;
         }
         if (material.occlusionHandle) {
             Texture2D<float> tOcclusion = GetTexture<Texture2D<float> >(material.occlusionHandle);
@@ -112,10 +106,9 @@ PSOutput PSMain(VSOutput psInput) {
     }
 
     PSOutput output;
-    output.GPositionDepth   = psInput.FragPos;
-    output.GNormalRoughness = float4(normalize(normal), clamp(roughness, 1e-4, 1.0));
-    output.GAlbedoMetallic  = float4(baseColor.rgb, metallic);
-    output.GAo              = occlusion;
+    output.GNormal = float4(normalize(normal), 0);
+    output.GAlbedo = baseColor;
+    output.GORM    = float4(occlusion, clamp(roughness, 1e-4, 1.0), metallic, 0);
 
     return output;
 }
