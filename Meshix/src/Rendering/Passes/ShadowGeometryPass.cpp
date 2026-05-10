@@ -59,12 +59,12 @@ void ShadowGeometryPass::Initialize(ID3D12Device10* device) {
 }
 
 void ShadowGeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
+    shadowDepthDSV->ClearDepth(commandList);
+    if (!renderContext->EnablePCSS) return;
+
     commandList->RSSetViewports(1, &viewport);
     commandList->RSSetScissorRects(1, &scissorRect);
     {
-        shadowDepthDSV->ClearDepth(commandList);
-        if (!renderContext->EnablePCSS) return;
-
         commandList->SetGraphicsRootSignature(rootSignature.Get());
         commandList->SetGraphicsRootConstantBufferView(1, renderContext->cascadeShadowConstantsBuffer.GetGpuVirtualAddress());
 

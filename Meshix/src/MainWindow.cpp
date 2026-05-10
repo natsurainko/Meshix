@@ -62,7 +62,7 @@ void MainWindow::BuildRenderPipeline() {
 
         renderPipelineBuilder.Views.AddExplicit<Vertix::DepthStencil>("GBuffer.Depth.DSV", "GBuffer.Depth", gDepthDSVDesc);
         renderPipelineBuilder.Views.AddExplicit<Vertix::ShaderResource>("GBuffer.Depth.SRV", "GBuffer.Depth",
-            CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2DArray(DXGI_FORMAT_R32_FLOAT));
+            CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT));
 
         renderPipelineBuilder.Views.AddExplicit<Vertix::DepthStencil>("Shadow.Depth.DSV", "Shadow.Depth", shadowDepthDSVDesc);
         renderPipelineBuilder.Views.AddExplicit<Vertix::ShaderResource>("Shadow.Depth.SRV", "Shadow.Depth",
