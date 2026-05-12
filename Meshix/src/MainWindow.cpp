@@ -72,23 +72,23 @@ void MainWindow::BuildRenderPipeline() {
             .DeclareWrite("GBuffer.Normal", &GeometryPass::gNormalRTV)
             .DeclareWrite("GBuffer.Albedo", &GeometryPass::gAlbedoRTV)
             .DeclareWrite("GBuffer.OcclusionRoughnessMetallic", &GeometryPass::gORMRTV)
-            .template DeclareWriteExplicit<Vertix::DepthStencil>("GBuffer.Depth.DSV", D3D12_RESOURCE_STATE_DEPTH_WRITE, &GeometryPass::gDepthDSV);
+            .DeclareWriteExplicit("GBuffer.Depth.DSV", &GeometryPass::gDepthDSV, D3D12_RESOURCE_STATE_DEPTH_WRITE);
         });
 
         renderPipelineBuilder.Passes.Add<AmbientOcclusionPass>([](auto &builder) { builder
-            .template DeclareReadExplicit<Vertix::ShaderResource>("GBuffer.Depth.SRV", D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &AmbientOcclusionPass::gDepthSRV)
+            .DeclareReadExplicit("GBuffer.Depth.SRV", &AmbientOcclusionPass::gDepthSRV, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
             .DeclareRead("GBuffer.Normal", &AmbientOcclusionPass::gNormalSRV)
             .DeclareWrite("GBuffer.OcclusionRoughnessMetallic", &AmbientOcclusionPass::gORMRTV);
         });
 
         renderPipelineBuilder.Passes.Add<ShadowGeometryPass>([] (auto &builder) { builder
-            .template DeclareWriteExplicit<Vertix::DepthStencil>("Shadow.Depth.DSV", D3D12_RESOURCE_STATE_DEPTH_WRITE, &ShadowGeometryPass::shadowDepthDSV);
+            .DeclareWriteExplicit("Shadow.Depth.DSV", &ShadowGeometryPass::shadowDepthDSV, D3D12_RESOURCE_STATE_DEPTH_WRITE);
         });
 
         renderPipelineBuilder.Passes.Add<ShadowPass>([] (auto &builder) { builder
-            .template DeclareReadExplicit<Vertix::ShaderResource>("Shadow.Depth.SRV", D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &ShadowPass::shadowDepthSRV)
+            .DeclareReadExplicit("Shadow.Depth.SRV", &ShadowPass::shadowDepthSRV, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
             .DeclareRead("GBuffer.Normal", &ShadowPass::gNormalSRV)
-            .template DeclareReadExplicit<Vertix::ShaderResource>("GBuffer.Depth.SRV", D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &ShadowPass::gDepthSRV)
+            .DeclareReadExplicit("GBuffer.Depth.SRV", &ShadowPass::gDepthSRV, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
             .DeclareWrite("Shadow.Mask", &ShadowPass::shadowMaskRTV);
         });
 
@@ -96,7 +96,7 @@ void MainWindow::BuildRenderPipeline() {
             .DeclareRead("GBuffer.Normal", &LightingPass::gNormalSRV)
             .DeclareRead("GBuffer.Albedo", &LightingPass::gAlbedoSRV)
             .DeclareRead("GBuffer.OcclusionRoughnessMetallic", &LightingPass::gORMSRV)
-            .template DeclareReadExplicit<Vertix::ShaderResource>("GBuffer.Depth.SRV", D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &LightingPass::gDepthSRV)
+            .DeclareReadExplicit("GBuffer.Depth.SRV", &LightingPass::gDepthSRV, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
             .DeclareRead("Shadow.Mask", &LightingPass::shadowMaskSRV)
             .DeclareSwapChainWrite(&LightingPass::currentFrameRTV);
         });
