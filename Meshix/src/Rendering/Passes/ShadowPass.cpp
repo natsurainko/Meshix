@@ -76,7 +76,7 @@ void ShadowPass::Initialize(ID3D12Device10* device) {
 }
 
 void ShadowPass::Execute(ID3D12GraphicsCommandList5* commandList) {
-    constexpr float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    constexpr float clearColor[] = { 1.0f, 0.0f, 0.0f, 0.0f };
 
     shadowMaskRTV->Clear(commandList, clearColor);
     if (!renderContext->EnablePCSS) return;

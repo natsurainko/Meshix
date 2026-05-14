@@ -20,6 +20,7 @@
 #include <Vertix/Pool/TexturePool.hpp>
 
 #include "../shaders/structures.h"
+#include "Gui/GuiContext.h"
 
 #define SHADER_BYTECODE(T) CD3DX12_SHADER_BYTECODE(T, sizeof(T))
 
@@ -30,10 +31,11 @@ struct CascadeShadowConstants {
 class RenderContext {
 public:
     explicit RenderContext(
-        const Vertix::GraphicsDevice* graphicsDevice,
-        Vertix::FrameCommandList* frameCommandList)
+        Vertix::GraphicsDevice* graphicsDevice,
+        Vertix::FrameCommandList* frameCommandList,
+        Vertix::SwapChain* swapChain)
     : frameConstantsBuffer(graphicsDevice), lightConstantsBuffer(graphicsDevice), cascadeShadowConstantsBuffer(graphicsDevice), objectConstantsBuffer(graphicsDevice, 4096),
-      texturePool(graphicsDevice), materialPool(graphicsDevice), graphicsDevice(graphicsDevice)
+      texturePool(graphicsDevice), materialPool(graphicsDevice), graphicsDevice(graphicsDevice), swapChain(swapChain)
     {
         Vertix::ResourceUploadHeap resourceUploadHeap {};
         frameCommandList->BeginCommand(nullptr);
@@ -116,6 +118,14 @@ public:
         return &perspectiveCamera;
     }
 
+private:
+    Vertix::GraphicsDevice* graphicsDevice = nullptr;
+    Vertix::SwapChain*      swapChain      = nullptr;
+
+    FrameConstants frameConstants{};
+    ObjectConstants objectConstants{};
+    CascadeShadowConstants cascadeShadowConstants{};
+public:
     bool EnablePCSS = true;
     bool EnableHBAO = true;
 
@@ -123,8 +133,8 @@ public:
     const float cameraNearPlane = 0.1f;
     const float cameraFarPlane = 100.0f;
 
-    const D3D12_RECT* scissorRect;
-    const D3D12_VIEWPORT* viewport;
+    const D3D12_RECT* scissorRect = nullptr;
+    const D3D12_VIEWPORT* viewport = nullptr;
 
     LightConstants LightConstants {
         .LightDirection = float3 { 0.3f, -0.925f, -0.225f },
@@ -132,13 +142,7 @@ public:
         .LightColor = float3 { 1.0f, 1.0f, 1.0f },
         .LightIntensity = 7.0f,
     };
-private:
     Vertix::Engine::PerspectiveCamera perspectiveCamera{4.0f / 3.0f, Vertix::Engine::DegreesToRadians(60), cameraNearPlane, cameraFarPlane};
-    const Vertix::GraphicsDevice* graphicsDevice = nullptr;
-
-    FrameConstants frameConstants{};
-    ObjectConstants objectConstants{};
-    CascadeShadowConstants cascadeShadowConstants{};
 };
 
 #endif //MESHIX_RENDER_CONTEXT_H

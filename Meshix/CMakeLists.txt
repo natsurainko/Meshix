@@ -18,6 +18,7 @@ target_sources(Meshix
 
             include/Controlling/KeyboardControllerInput.h
             include/Controlling/MouseControllerInput.h
+            include/Gui/GuiContext.h
             include/Rendering/RenderContext.h
             include/Rendering/Passes/GeometryPass.h
             include/Rendering/Passes/ShadowGeometryPass.h

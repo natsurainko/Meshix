@@ -6,7 +6,6 @@
 
 #include <imgui/backends/imgui_impl_dx12.h>
 #include <imgui/backends/imgui_impl_win32.h>
-#include <Vertix/Graphics/SwapChain.h>
 
 Vertix::DescriptorHeap* imguiSrvDescriptorHeap = nullptr;
 
@@ -15,29 +14,75 @@ void ImGuiPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
     {
-        static bool _enableVSync = true;
-        bool enableVSync = _enableVSync;
+        if (guiContext.windowAboutVisible) ImGui::OpenPopup("About");
 
-        ImGui::Begin("Meshix");
-        {
-            ImGui::Text("Use WASD, Left Shift, and Space to move the camera.");
-            ImGui::TextLinkOpenURL("GitHub Repository", "https://github.com/natsurainko/Vertix");
+        const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        if (ImGui::BeginPopupModal("About", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Meshix");
+            ImGui::Text("A lightweight modern real-time renderer developed based on the Vertix framework");
+            ImGui::Separator();
 
-            ImGui::Checkbox("Enable VSync", &enableVSync);
+            constexpr float buttonWidth = 120.0f;
+            ImGui::TextLinkOpenURL("GitHub Repository", "https://github.com/natsurainko/Meshix");
             ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - buttonWidth);
+            if (ImGui::Button("OK", ImVec2(buttonWidth, 0))) {
+                guiContext.windowAboutVisible = false;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
+
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("Scene")) {
+                if (ImGui::MenuItem("New",  "Ctrl+N")) { }
+                if (ImGui::MenuItem("Open", "Ctrl+O")) { }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Exit")) { exit(0); }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Render")) {
+                if (ImGui::MenuItem("VSync", nullptr, &guiContext.enableVSync)) guiContext.OnVSyncChanged();
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Window")) {
+                ImGui::MenuItem("Performance Window", nullptr, &guiContext.windowPerformanceVisible);
+                ImGui::MenuItem("Camera Window", nullptr, &guiContext.windowCameraVisible);
+                ImGui::MenuItem("Scene Window", nullptr, &guiContext.windowSceneVisible);
+                ImGui::MenuItem("Shader Window", nullptr, &guiContext.windowShaderVisible);
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Help")) {
+                ImGui::MenuItem("About", nullptr, &guiContext.windowAboutVisible);
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMainMenuBar();
+        }
+
+        if (guiContext.windowCameraVisible) {
+            const auto camera = renderContext->GetPerspectiveCamera();
+            ImGui::Begin("Camera", &guiContext.windowCameraVisible);
+            ImGui::InputFloat3("Position", const_cast<float*>(reinterpret_cast<const float*>(&camera->GetPosition())), "%.3f", ImGuiInputTextFlags_ReadOnly);
+            ImGui::InputFloat4("Orientation", const_cast<float*>(reinterpret_cast<const float*>(&camera->GetOrientation())), "%.3f", ImGuiInputTextFlags_ReadOnly);
+            ImGui::End();
+        }
+
+        if (guiContext.windowPerformanceVisible) {
+            ImGui::Begin("Performance", &guiContext.windowPerformanceVisible);
             ImGui::Text("%.0f FPS (%.2f ms/frame)", io->Framerate, 1000.0f / io->Framerate);
+            ImGui::End();
+        }
 
-            if (ImGui::CollapsingHeader("Scene Information", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Text("%llu SceneObjects, %u Models, %u Materials, %u Textures",
-                    renderContext->sceneObjects.size(),
-                    renderContext->modelPool.GetCount(),
-                    renderContext->materialPool.GetCount(),
-                    renderContext->texturePool.GetCount());
+        if (guiContext.windowShaderVisible) {
+            ImGui::Begin("Shader", &guiContext.windowShaderVisible);
 
-                const auto camera = renderContext->GetPerspectiveCamera();
-                ImGui::SeparatorText("Camera");
-                ImGui::InputFloat3("Position", const_cast<float*>(reinterpret_cast<const float*>(&camera->GetPosition())), "%.3f", ImGuiInputTextFlags_ReadOnly);
-                ImGui::InputFloat4("Orientation", const_cast<float*>(reinterpret_cast<const float*>(&camera->GetOrientation())), "%.3f", ImGuiInputTextFlags_ReadOnly);
+            if (ImGui::CollapsingHeader("Lighting")) {
                 ImGui::SeparatorText("Directional Light");
                 ImGui::SliderFloat3("Direction", reinterpret_cast<float*>(&renderContext->LightConstants.LightDirection), 1.0f, -1.0f, "%.3f");
                 ImGui::ColorEdit3("Light Color", reinterpret_cast<float*>(&renderContext->LightConstants.LightColor));
@@ -45,16 +90,19 @@ void ImGuiPass::Execute(ID3D12GraphicsCommandList5* commandList) {
                 ImGui::SliderFloat("Ambient Intensity", &renderContext->LightConstants.AmbientIntensity, 0.0f, 1.0f, "%.3f");
             }
 
-            if (ImGui::CollapsingHeader("Shader Effect", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Checkbox("Enable PCSS Shadow (Percentage-Closer Soft Shadows)", &renderContext->EnablePCSS);
-                ImGui::Checkbox("Enable HBAO (Horizon-Based Ambient Occlusion)", &renderContext->EnableHBAO);
+            ImGui::Checkbox("##shadow_enabled", &guiContext.enableShadowEffect);
+            ImGui::SameLine();
+            if (!ImGui::CollapsingHeader("Shadow") && guiContext.enableShadowEffect) {
+                ImGui::Text("Percentage-Closer Soft Shadow");
             }
-        }
-        ImGui::End();
 
-        if (enableVSync != _enableVSync) {
-            swapChain->SetEnableVSync(enableVSync);
-            _enableVSync = enableVSync;
+            ImGui::Checkbox("##occlusion_enabled", &guiContext.enableOcclusionEffect);
+            ImGui::SameLine();
+            if (!ImGui::CollapsingHeader("Occlusion") && guiContext.enableOcclusionEffect) {
+                ImGui::Text("Horizon-Based Ambient Occlusion");
+            }
+
+            ImGui::End();
         }
     }
     ImGui::Render();

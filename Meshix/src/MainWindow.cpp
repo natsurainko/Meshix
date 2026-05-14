@@ -20,7 +20,7 @@
 void MainWindow::BuildRenderPipeline() {
     const auto windowSize = GetWindowSize();
 
-    renderContext = std::make_unique<RenderContext>(graphicsDevice, frameCommandList);
+    renderContext = std::make_unique<RenderContext>(graphicsDevice, frameCommandList, swapChain);
     renderContext->SetWindowSize(windowSize);
 
     Vertix::RenderPipelineBuilder renderPipelineBuilder { graphicsDevice, frameCommandList, renderContext.get() };
@@ -33,6 +33,7 @@ void MainWindow::BuildRenderPipeline() {
         };
 
         constexpr auto depthClearValue = D3D12_CLEAR_VALUE { .Format = DXGI_FORMAT_D32_FLOAT, .DepthStencil = { .Depth = 1.0f, .Stencil = 0 } };
+        constexpr auto shadowClearValue = D3D12_CLEAR_VALUE { .Format = DXGI_FORMAT_R16_FLOAT, .Color = { 1.0f } };
 
         renderPipelineBuilder.Textures.Add<Vertix::DrawColorSampleAccessor>("GBuffer.Normal", CD3DX12_RESOURCE_DESC::Tex2D(
             DXGI_FORMAT_R16G16B16A16_FLOAT, VERTIX_VECTOR2D_EXPAND(windowSize)));
@@ -46,7 +47,7 @@ void MainWindow::BuildRenderPipeline() {
         renderPipelineBuilder.Textures.Add<Vertix::DrawDepthSampleAccessor>("Shadow.Depth", CD3DX12_RESOURCE_DESC::Tex2D(
             DXGI_FORMAT_R32_TYPELESS, renderContext->ShadowMapSize, renderContext->ShadowMapSize, CASCADE_NUM), false, &depthClearValue);
         renderPipelineBuilder.Textures.Add<Vertix::DrawColorSampleAccessor>("Shadow.Mask", CD3DX12_RESOURCE_DESC::Tex2D(
-            DXGI_FORMAT_R16_FLOAT, VERTIX_VECTOR2D_EXPAND(windowSize)));
+            DXGI_FORMAT_R16_FLOAT, VERTIX_VECTOR2D_EXPAND(windowSize)), true, &shadowClearValue);
 
         D3D12_DEPTH_STENCIL_VIEW_DESC gDepthDSVDesc {};
         gDepthDSVDesc.Format = DXGI_FORMAT_D32_FLOAT;

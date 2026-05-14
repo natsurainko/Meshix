@@ -17,10 +17,11 @@
 #include "Rendering/RenderContext.h"
 
 extern Vertix::DescriptorHeap* imguiSrvDescriptorHeap;
+extern Vertix::TexturePool<>* imguiRefTexturePool;
 
 class ImGuiPass : public Vertix::RenderPass<RenderContext> {
 public:
-    explicit ImGuiPass(const Vertix::GameWindow* window) : swapChain(window->GetSwapChain()) {
+    explicit ImGuiPass(const Vertix::GameWindow* window) : guiContext(window->GetSwapChain()) {
         if (ImGui::GetCurrentContext() != nullptr) {
             io = &ImGui::GetIO();
             return;
@@ -58,6 +59,8 @@ public:
         init_info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_handle) { return imguiSrvDescriptorHeap->AllocDescriptorHandle(*out_cpu_handle, *out_gpu_handle); };
         init_info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo*, const D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE) { return imguiSrvDescriptorHeap->FreeDescriptorHandle(cpu_handle); };
         ImGui_ImplDX12_Init(&init_info);
+
+        GuiContext::RegisterSettingsHandler(&guiContext);
     }
 
     ~ImGuiPass() override {
@@ -76,8 +79,8 @@ public:
     const Vertix::RenderResourceView<Vertix::RenderTarget>** currentFrameRTV = nullptr;
 
 private:
-    Vertix::SwapChain* swapChain;
     ImGuiIO* io;
+    GuiContext guiContext;
 };
 
 #endif //MESHIX_IMGUIPASS_H
