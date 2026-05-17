@@ -30,12 +30,17 @@ VSOutput VSMain(VSInput vsInput) {
 
 ConstantBuffer<FrameConstants> frameConstants : register(b0);
 
+cbuffer TextureHandles : register(b1) {
+    uint gDepthHandle;
+    uint gNormalHandle;
+}
+
 SamplerState PointSampler : register(s0);
 
-Texture2D<float>  gDepth  : register(t0);
-Texture2D<float4> gNormal : register(t1);
-
 float4 PSMain(VSOutput input) : SV_TARGET {
+    Texture2D<float>  gDepth  = ResourceDescriptorHeap[gDepthHandle];
+    Texture2D<float4> gNormal = ResourceDescriptorHeap[gNormalHandle];
+
     float depth = gDepth.SampleLevel(PointSampler, input.TexCoord, 0).r;
     if (depth == 1.0f) return float4(1.0f, 1.0f, 1.0f, 1.0f);
 

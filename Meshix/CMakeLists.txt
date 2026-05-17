@@ -45,7 +45,7 @@ set(HLSL_SHADER_FILES
 )
 
 set_source_files_properties(shaders/passes/AmbientOcclusionPass.hlsl PROPERTIES
-        ShaderModel  "6_0"
+        ShaderModel  "6_6"
         VSMain       "VSMain"
         PSMain       "PSMain"
         ByteCodeName "AMBIENT_OCCLUSION_PASS"
@@ -57,19 +57,19 @@ set_source_files_properties(shaders/passes/GeometryPass.hlsl PROPERTIES
         ByteCodeName "GEOMETRY_PASS"
 )
 set_source_files_properties(shaders/passes/LightingPass.hlsl PROPERTIES
-        ShaderModel  "6_0"
+        ShaderModel  "6_6"
         VSMain       "VSMain"
         PSMain       "PSMain"
         ByteCodeName "LIGHTING_PASS"
 )
 set_source_files_properties(shaders/passes/ShadowGeometryPass.hlsl PROPERTIES
-        ShaderModel  "6_0"
+        ShaderModel  "6_6"
         VSMain       "VSMain"
         PSMain       "PSMain"
         ByteCodeName "SHADOW_GEOMETRY_PASS"
 )
 set_source_files_properties(shaders/passes/ShadowPass.hlsl PROPERTIES
-        ShaderModel  "6_0"
+        ShaderModel  "6_6"
         VSMain       "VSMain"
         PSMain       "PSMain"
         ByteCodeName "SHADOW_PASS"

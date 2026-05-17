@@ -10,19 +10,30 @@
 
 #include "Rendering/RenderContext.h"
 
-class LightingPass : public Vertix::RenderPass<RenderContext> {
+class LightingPass : public Vertix::RenderPass {
 public:
+    explicit LightingPass(RenderContext* renderContext) : renderContext(renderContext) {}
+
     void Initialize(ID3D12Device10* device) override;
     void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    const Vertix::RenderResourceView<Vertix::ShaderResource>* gNormalSRV;
-    const Vertix::RenderResourceView<Vertix::ShaderResource>* gAlbedoSRV;
-    const Vertix::RenderResourceView<Vertix::ShaderResource>* gORMSRV;
-    const Vertix::RenderResourceView<Vertix::ShaderResource>* gDepthSRV;
-    const Vertix::RenderResourceView<Vertix::ShaderResource>* shadowMaskSRV;
-    const Vertix::RenderResourceView<Vertix::RenderTarget>** currentFrameRTV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gNormalSRV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gAlbedoSRV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gORMSRV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gDepthSRV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* shadowMaskSRV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* currentFrameRTV = nullptr;
+
 private:
-    ID3D12DescriptorHeap* descriptorHeap = nullptr;
+    struct TextureHandles {
+        uint gNormalHandle;
+        uint gAlbedoHandle;
+        uint gORMHandle;
+        uint gDepthHandle;
+        uint ShadowMaskHandle;
+    } handles = {};
+
+    RenderContext* renderContext;
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;

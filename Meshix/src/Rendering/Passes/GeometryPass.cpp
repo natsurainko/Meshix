@@ -82,17 +82,16 @@ void GeometryPass::Initialize(ID3D12Device10* device) {
 void GeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     constexpr float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
-    commandList->SetDescriptorHeaps(1, renderContext->texturePool.GetDescriptorHeap().GetAddressOf());
     commandList->SetGraphicsRootSignature(rootSignature.Get());
     commandList->SetGraphicsRootConstantBufferView(0, renderContext->frameConstantsBuffer.GetGpuVirtualAddress());
-    commandList->SetGraphicsRootShaderResourceView(3, renderContext->materialPool.GetGpuVirtualAddress());
+    commandList->SetGraphicsRootShaderResourceView(3, renderContext->materialPool->GetGpuVirtualAddress());
 
     const D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[3] = {
-        gNormalRTV->GetHandle(),
-        gAlbedoRTV->GetHandle(),
-        gORMRTV->GetHandle(),
+        gNormalRTV->cpuHandle,
+        gAlbedoRTV->cpuHandle,
+        gORMRTV->cpuHandle,
     };
-    commandList->OMSetRenderTargets(3, rtvHandles, FALSE, gDepthDSV->GetHandleAddress());
+    commandList->OMSetRenderTargets(3, rtvHandles, FALSE, &gDepthDSV->cpuHandle);
 
     gNormalRTV->Clear(commandList, clearColor);
     gAlbedoRTV->Clear(commandList, clearColor);
@@ -108,7 +107,7 @@ void GeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
 
         for (const auto &mesh : sceneObject->SceneModel->Meshes) {
             if (mesh.Material.slot) {
-                if (const auto material = renderContext->materialPool.GetAs<Vertix::Engine::DefaultPBRMaterial>(mesh.Material); material->alphaMode == 2) {
+                if (const auto material = renderContext->materialPool->GetAs<Vertix::Engine::DefaultPBRMaterial>(mesh.Material); material->alphaMode == 2) {
                     // BLEND materials should skip the deferred rendering phase.
                     // TODO: Add a Forward Rendering Pass to render transparent material meshes.
                     continue;

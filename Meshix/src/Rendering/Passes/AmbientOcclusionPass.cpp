@@ -9,27 +9,24 @@
 
 void AmbientOcclusionPass::Initialize(ID3D12Device10* device) {
     {
-        CD3DX12_DESCRIPTOR_RANGE srvRanges[2];
-        srvRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-        srvRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
-
         CD3DX12_STATIC_SAMPLER_DESC pointSampler(0);
         pointSampler.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
         pointSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
         pointSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
         pointSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 
-        CD3DX12_ROOT_PARAMETER rootParameters[3];
+        CD3DX12_ROOT_PARAMETER rootParameters[2];
         rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
-        rootParameters[1].InitAsDescriptorTable(1, &srvRanges[0], D3D12_SHADER_VISIBILITY_PIXEL);
-        rootParameters[2].InitAsDescriptorTable(1, &srvRanges[1], D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParameters[1].InitAsConstants(2, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 
         D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
-        rootSignatureDesc.NumParameters = 3;
+        rootSignatureDesc.NumParameters = 2;
         rootSignatureDesc.pParameters = rootParameters;
         rootSignatureDesc.NumStaticSamplers = 1;
         rootSignatureDesc.pStaticSamplers = &pointSampler;
-        rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+        rootSignatureDesc.Flags =
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+                D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 
         Microsoft::WRL::ComPtr<ID3DBlob> signature;
         Microsoft::WRL::ComPtr<ID3DBlob> error;
@@ -82,17 +79,16 @@ void AmbientOcclusionPass::Initialize(ID3D12Device10* device) {
         ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState)));
     }
 
-    descriptorHeap = gDepthSRV->GetHeap()->GetDescriptorHeap().Get();
+    handles.gNormalHandle = gNormalSRV->slot;
+    handles.gDepthHandle = gDepthSRV->slot;
 }
 
 void AmbientOcclusionPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     if (!renderContext->EnableHBAO) return;
 
-    commandList->SetDescriptorHeaps(1, &descriptorHeap);
     commandList->SetGraphicsRootSignature(rootSignature.Get());
     commandList->SetGraphicsRootConstantBufferView(0, renderContext->frameConstantsBuffer.GetGpuVirtualAddress());
-    gDepthSRV->SetGraphicsRootDescriptorTable(commandList, 1);
-    gNormalSRV->SetGraphicsRootDescriptorTable(commandList, 2);
+    commandList->SetGraphicsRoot32BitConstants(1, 2, &handles, 0);
 
     gORMRTV->SetRenderTarget(commandList);
     commandList->SetPipelineState(pipelineState.Get());

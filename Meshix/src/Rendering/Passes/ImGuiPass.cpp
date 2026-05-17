@@ -7,7 +7,58 @@
 #include <imgui/backends/imgui_impl_dx12.h>
 #include <imgui/backends/imgui_impl_win32.h>
 
-Vertix::DescriptorHeap* imguiSrvDescriptorHeap = nullptr;
+ImGuiPass::~ImGuiPass() {
+    if (ImGui::GetCurrentContext() == nullptr) return;
+
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+}
+
+void ImGuiPass::Initialize(ID3D12Device10* device) {
+    static Vertix::DescriptorHeap* sharedDescriptorHeap = renderContext->sharedDescriptorHeap;
+
+    if (ImGui::GetCurrentContext() != nullptr) {
+        io = &ImGui::GetIO();
+        return;
+    }
+
+    ImGui_ImplWin32_EnableDpiAwareness();
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    io = &ImGui::GetIO();
+    io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io->ConfigDebugIsDebuggerPresent = true;
+
+    ImGui::StyleColorsDark();
+
+    const float dpiScale = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY));
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.ScaleAllSizes(dpiScale);
+    style.FontScaleDpi = dpiScale;
+
+    ImGui_ImplWin32_Init(window->GetWindowHandle());
+
+    ImGui_ImplDX12_InitInfo init_info = {};
+    init_info.Device = device;
+    init_info.CommandQueue = window->GetFrameCommandList()->GetD3D12CommandQueue().Get();
+    init_info.NumFramesInFlight = 2;
+    init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    init_info.DSVFormat = DXGI_FORMAT_UNKNOWN;
+
+    init_info.SrvDescriptorHeap = sharedDescriptorHeap->GetDescriptorHeap();
+    init_info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_handle) {
+        const auto handle = sharedDescriptorHeap->AllocDescriptorHandle();
+        *out_cpu_handle = handle.cpuHandle;
+        *out_gpu_handle = handle.gpuHandle;
+    };
+    init_info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE) {
+        return sharedDescriptorHeap->FreeDescriptorHandle(cpu_handle);
+    };
+    ImGui_ImplDX12_Init(&init_info);
+
+    GuiContext::RegisterSettingsHandler(&guiContext);
+}
 
 void ImGuiPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     ImGui_ImplDX12_NewFrame();
@@ -107,7 +158,6 @@ void ImGuiPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     }
     ImGui::Render();
 
-    (*currentFrameRTV)->SetRenderTarget(commandList);
-    commandList->SetDescriptorHeaps(1, imguiSrvDescriptorHeap->GetDescriptorHeap().GetAddressOf());
+    currentFrameRTV->SetRenderTarget(commandList);
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 }

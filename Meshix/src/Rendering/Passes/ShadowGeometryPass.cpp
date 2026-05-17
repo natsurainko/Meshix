@@ -78,7 +78,7 @@ void ShadowGeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
 
             for (const auto &mesh : sceneObject->SceneModel->Meshes) {
                 if (mesh.Material.slot) {
-                    if (const auto material = renderContext->materialPool.GetAs<Vertix::Engine::DefaultPBRMaterial>(mesh.Material); material->alphaMode == 2) {
+                    if (const auto material = renderContext->materialPool->GetAs<Vertix::Engine::DefaultPBRMaterial>(mesh.Material); material->alphaMode == 2) {
                         // BLEND materials should skip the shadow rendering phase.
                         continue;
                     }

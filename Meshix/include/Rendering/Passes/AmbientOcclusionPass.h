@@ -10,16 +10,24 @@
 
 #include "Rendering/RenderContext.h"
 
-class AmbientOcclusionPass : public Vertix::RenderPass<RenderContext> {
+class AmbientOcclusionPass : public Vertix::RenderPass {
 public:
+    explicit AmbientOcclusionPass(RenderContext* renderContext) : renderContext(renderContext) {}
+
     void Initialize(ID3D12Device10* device) override;
     void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    const Vertix::RenderResourceView<Vertix::ShaderResource>* gDepthSRV;
-    const Vertix::RenderResourceView<Vertix::ShaderResource>* gNormalSRV;
-    const Vertix::RenderResourceView<Vertix::RenderTarget>* gORMRTV;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gDepthSRV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gNormalSRV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* gORMRTV = nullptr;
+
 private:
-    ID3D12DescriptorHeap* descriptorHeap = nullptr;
+    struct TextureHandles {
+        uint32_t gDepthHandle;
+        uint32_t gNormalHandle;
+    } handles = {};
+
+    RenderContext* renderContext;
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;

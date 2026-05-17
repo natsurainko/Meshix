@@ -36,11 +36,13 @@ ConstantBuffer<LightConstants>         lightConstants         : register(b0);
 ConstantBuffer<CascadeShadowConstants> cascadeShadowConstants : register(b1);
 ConstantBuffer<FrameConstants>         frameConstants         : register(b2);
 
-SamplerState NearestSampler : register(s0);
+cbuffer TextureHandles : register(b3) {
+    uint gNormalHandle;
+    uint gDepthHandle;
+    uint ShadowDepthHandle;
+}
 
-Texture2D<float>      gDepth      : register(t0);
-Texture2D<float4>     gNormal     : register(t1);
-Texture2DArray<float> ShadowDepth : register(t2);
+SamplerState NearestSampler : register(s0);
 
 // static const float kBias[CASCADE_NUM] = { 3.5, 1.5, 1.0, 1.0, 1.0 };
 
@@ -73,6 +75,10 @@ float3 GetBiasNormalOffset(float3 N, float NdotL) {
 */
 
 float PSMain(VSOutput psInput) : SV_TARGET0 {
+    Texture2D<float4>     gNormal     = ResourceDescriptorHeap[gNormalHandle];
+    Texture2D<float>      gDepth      = ResourceDescriptorHeap[gDepthHandle];
+    Texture2DArray<float> ShadowDepth = ResourceDescriptorHeap[ShadowDepthHandle];
+
     float depth = gDepth.SampleLevel(NearestSampler, psInput.TexCoord, 0);
     if (depth == 1.0) return 0;
     float  linearDepth  = LinearizeDepth(depth, frameConstants.NearFarProjScale);

@@ -46,12 +46,12 @@ StructuredBuffer<MaterialConstants> materialConstants : register(t0);
 // 1-based handle
 template<typename T>
 T GetTexture(uint handle) {
-    return ResourceDescriptorHeap[handle - 1];
+    return ResourceDescriptorHeap[handle];
 }
 
 // 1-based handle
 MaterialConstants GetMaterial(uint handle) {
-    return materialConstants[handle - 1];
+    return materialConstants[handle];
 }
 
 struct PSOutput {

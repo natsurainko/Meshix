@@ -10,22 +10,29 @@
 
 #include "Rendering/RenderContext.h"
 
-class ShadowPass : public Vertix::RenderPass<RenderContext> {
+class ShadowPass : public Vertix::RenderPass {
 public:
+    explicit ShadowPass(RenderContext* renderContext) : renderContext(renderContext) {}
+
     void Initialize(ID3D12Device10 *device) override;
     void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    const Vertix::RenderResourceView<Vertix::ShaderResource>* gDepthSRV;
-    const Vertix::RenderResourceView<Vertix::ShaderResource>* gNormalSRV;
-    const Vertix::RenderResourceView<Vertix::ShaderResource>* shadowDepthSRV;
-    const Vertix::RenderResourceView<Vertix::RenderTarget>* shadowMaskRTV;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gDepthSRV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gNormalSRV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* shadowDepthSRV = nullptr;
+    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* shadowMaskRTV = nullptr;
+
 private:
-    ID3D12DescriptorHeap* descriptorHeap = nullptr;
+    struct TextureHandles {
+        uint gNormalHandle;
+        uint gDepthHandle;
+        uint ShadowDepthHandle;
+    } handles = {};
+
+    RenderContext* renderContext;
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
-
-    float ShadowMapTexel[2] = {};
 };
 
 #endif //MESHIX_DIRECTIONALSHADOWPASS_H

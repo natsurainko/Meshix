@@ -30,19 +30,29 @@ VSOutput VSMain(VSInput vsInput) {
 ConstantBuffer<FrameConstants> frameConstants : register(b0);
 ConstantBuffer<LightConstants> lightConstants : register(b1);
 
+cbuffer TextureHandles : register(b2) {
+    uint gNormalHandle;
+    uint gAlbedoHandle;
+    uint gORMHandle;
+    uint gDepthHandle;
+    uint ShadowMaskHandle;
+}
+
 SamplerState NearestSampler : register(s0);
 
-Texture2D<float4> gNormal     : register(t0);
-Texture2D<float4> gAlbedo     : register(t1);
-Texture2D<float4> gORM        : register(t2);
-Texture2D<float>  gDepth      : register(t3);
-Texture2D<float>  ShadowMask  : register(t4);
+static float3 gammaCorrection = 1.0 / 2.2;
 
 float3 ACESFilmic(float3 x) {
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
 
 float4 PSMain(VSOutput psInput) : SV_TARGET0 {
+    Texture2D<float4> gNormal    = ResourceDescriptorHeap[gNormalHandle];
+    Texture2D<float4> gAlbedo    = ResourceDescriptorHeap[gAlbedoHandle];
+    Texture2D<float4> gORM       = ResourceDescriptorHeap[gORMHandle];
+    Texture2D<float>  gDepth     = ResourceDescriptorHeap[gDepthHandle];
+    Texture2D<float>  ShadowMask = ResourceDescriptorHeap[ShadowMaskHandle];
+
     float depth = gDepth.Sample(NearestSampler, psInput.TexCoord);
     if (depth == 1.0) discard;
 
@@ -105,7 +115,7 @@ float4 PSMain(VSOutput psInput) : SV_TARGET0 {
     color = ACESFilmic(color);
 
     // using sRGB rtvs to skip gamma correct
-    // color = pow(color, gammaCorrection);
+    color = pow(color, gammaCorrection);
 
     return float4(color, 1.0);
 }

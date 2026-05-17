@@ -9,24 +9,21 @@
 
 void LightingPass::Initialize(ID3D12Device10* device) {
     {
-        CD3DX12_DESCRIPTOR_RANGE srvRanges[2];
-        srvRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, 0);
-        srvRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4);
-
         CD3DX12_STATIC_SAMPLER_DESC staticSampler(0);
 
-        CD3DX12_ROOT_PARAMETER rootParameters[4];
+        CD3DX12_ROOT_PARAMETER rootParameters[3];
         rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
         rootParameters[1].InitAsConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_PIXEL);
-        rootParameters[2].InitAsDescriptorTable(1, &srvRanges[0], D3D12_SHADER_VISIBILITY_PIXEL);
-        rootParameters[3].InitAsDescriptorTable(1, &srvRanges[1], D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParameters[2].InitAsConstants(5, 2, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 
         D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-        rootSignatureDesc.NumParameters = 4;
+        rootSignatureDesc.NumParameters = 3;
         rootSignatureDesc.pParameters = rootParameters;
         rootSignatureDesc.NumStaticSamplers = 1;
         rootSignatureDesc.pStaticSamplers = &staticSampler;
-        rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+        rootSignatureDesc.Flags =
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 
         Microsoft::WRL::ComPtr<ID3DBlob> signature;
         Microsoft::WRL::ComPtr<ID3DBlob> error;
@@ -55,29 +52,30 @@ void LightingPass::Initialize(ID3D12Device10* device) {
         psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC2(D3D12_DEFAULT);
         psoDesc.DepthStencilState.DepthEnable = FALSE;
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         psoDesc.NumRenderTargets = 1;
         psoDesc.SampleDesc.Count = 1;
         psoDesc.SampleMask = UINT_MAX;
         ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState)));
     }
 
-    descriptorHeap = gDepthSRV->GetHeap()->GetDescriptorHeap().Get();
+    handles.gNormalHandle = gNormalSRV->slot;
+    handles.gAlbedoHandle = gAlbedoSRV->slot;
+    handles.gORMHandle = gORMSRV->slot;
+    handles.gDepthHandle = gDepthSRV->slot;
+    handles.ShadowMaskHandle = shadowMaskSRV->slot;
 }
 
 void LightingPass::Execute(ID3D12GraphicsCommandList5* commandList) {
-    constexpr float clearColor[] = { 0.127437680f, 0.300543794f, 0.846873232f, 1.0f };
+    constexpr float clearColor[] = { 0.3921f, 0.5843f, 0.9294f, 1.0f };
 
-    commandList->SetDescriptorHeaps(1, &descriptorHeap);
     commandList->SetGraphicsRootSignature(rootSignature.Get());
     commandList->SetGraphicsRootConstantBufferView(0, renderContext->frameConstantsBuffer.GetGpuVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(1, renderContext->lightConstantsBuffer.GetGpuVirtualAddress());
+    commandList->SetGraphicsRoot32BitConstants(2, 5, &handles, 0);
 
-    gNormalSRV->SetGraphicsRootDescriptorTable(commandList, 2);
-    shadowMaskSRV->SetGraphicsRootDescriptorTable(commandList, 3);
-
-    (*currentFrameRTV)->SetRenderTarget(commandList);
-    (*currentFrameRTV)->Clear(commandList, clearColor);
+    currentFrameRTV->SetRenderTarget(commandList);
+    currentFrameRTV->Clear(commandList, clearColor);
 
     commandList->SetPipelineState(pipelineState.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);

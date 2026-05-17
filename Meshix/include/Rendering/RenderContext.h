@@ -35,7 +35,7 @@ public:
         Vertix::FrameCommandList* frameCommandList,
         Vertix::SwapChain* swapChain)
     : frameConstantsBuffer(graphicsDevice), lightConstantsBuffer(graphicsDevice), cascadeShadowConstantsBuffer(graphicsDevice), objectConstantsBuffer(graphicsDevice, 4096),
-      texturePool(graphicsDevice), materialPool(graphicsDevice), graphicsDevice(graphicsDevice), swapChain(swapChain)
+      graphicsDevice(graphicsDevice), swapChain(swapChain)
     {
         Vertix::ResourceUploadHeap resourceUploadHeap {};
         frameCommandList->BeginCommand(nullptr);
@@ -58,9 +58,10 @@ public:
     Vertix::ConstantBuffer<CascadeShadowConstants> cascadeShadowConstantsBuffer;
     Vertix::ConstantBufferPageArray<ObjectConstants> objectConstantsBuffer;
 
-    Vertix::TexturePool<> texturePool;
-    Vertix::Engine::DefaultMaterialPool<> materialPool;
-    Vertix::ModelPool modelPool;
+    Vertix::DescriptorHeap* sharedDescriptorHeap = nullptr;
+    std::unique_ptr<Vertix::TexturePool> texturePool;
+    std::unique_ptr<Vertix::ModelPool>   modelPool;
+    std::unique_ptr<Vertix::MaterialPool<Vertix::Engine::DefaultMaterialConstants>> materialPool;
 
     Vertix::Vector2D<UINT> windowSize;
 
