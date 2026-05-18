@@ -8,8 +8,8 @@
 #include <memory>
 #include <Vertix.Engine/Camera/PerspectiveCamera.h>
 #include <Vertix.Engine/Effect/Shadow/CascadeShadowMapping.h>
-#include <../../../Vertix/Vertix/include/Vertix/Rendering/Buffers/ConstantBuffer.hpp>
 #include <Vertix/Graphics/Buffers/ConstantBufferPageArray.hpp>
+#include <Vertix/Rendering/Buffers/ConstantBuffer.hpp>
 #include <Vertix.Engine/Helpers/MathHelper.h>
 #include <Vertix.Engine/Helpers/VectorHelper.h>
 #include <Vertix.Engine/Pool/DefaultMaterialPool.hpp>
