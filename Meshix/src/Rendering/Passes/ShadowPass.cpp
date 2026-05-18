@@ -76,9 +76,9 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     if (!renderContext->EnablePCSS) return;
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetGraphicsRootConstantBufferView(0, renderContext->lightConstantsBuffer.GetGpuVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(1, renderContext->cascadeShadowConstantsBuffer.GetGpuVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(2, renderContext->frameConstantsBuffer.GetGpuVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(0, lightConstantsAddress);
+    commandList->SetGraphicsRootConstantBufferView(1, cascadeShadowConstantsAddress);
+    commandList->SetGraphicsRootConstantBufferView(2, frameConstantsAddress);
     commandList->SetGraphicsRoot32BitConstants(3, 3, &handles, 0);
 
     shadowMaskRTV->SetRenderTarget(commandList);

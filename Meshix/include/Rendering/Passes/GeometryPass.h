@@ -22,6 +22,8 @@ public:
     const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* gORMRTV = nullptr;
     const Vertix::RenderResourceView<Vertix::RenderResourceViewType::DepthStencil>* gDepthDSV = nullptr;
 
+    D3D12_GPU_VIRTUAL_ADDRESS frameConstantsAddress = {};
+
 private:
     RenderContext* renderContext;
 

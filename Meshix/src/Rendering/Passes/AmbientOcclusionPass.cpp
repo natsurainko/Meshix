@@ -87,7 +87,7 @@ void AmbientOcclusionPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     if (!renderContext->EnableHBAO) return;
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetGraphicsRootConstantBufferView(0, renderContext->frameConstantsBuffer.GetGpuVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(0, frameConstantsAddress);
     commandList->SetGraphicsRoot32BitConstants(1, 2, &handles, 0);
 
     gORMRTV->SetRenderTarget(commandList);

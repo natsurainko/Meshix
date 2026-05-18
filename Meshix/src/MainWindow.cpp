@@ -50,6 +50,10 @@ void MainWindow::BuildRenderPipeline() {
         renderPipelineBuilder.Textures.Add("Shadow.Mask", CD3DX12_RESOURCE_DESC::Tex2D(
             DXGI_FORMAT_R16_FLOAT, VERTIX_VECTOR2D_EXPAND(windowSize)), D3D12_CLEAR_VALUE { .Format = DXGI_FORMAT_R16_FLOAT, .Color = { 1.0f } });
 
+        renderPipelineBuilder.Buffers.ConstantBuffer<FrameConstants>("Constants.Frame", CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD));
+        renderPipelineBuilder.Buffers.ConstantBuffer<LightConstants>("Constants.Light", CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD));
+        renderPipelineBuilder.Buffers.ConstantBuffer<CascadeShadowConstants>("Constants.CascadeShadow", CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD));
+
         D3D12_DEPTH_STENCIL_VIEW_DESC gDepthDSVDesc {};
         gDepthDSVDesc.Format = DXGI_FORMAT_D32_FLOAT;
         gDepthDSVDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
@@ -64,6 +68,7 @@ void MainWindow::BuildRenderPipeline() {
         const auto shadowDepthSRVDesc = Vertix::RenderResourceViewDesc { .desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2DArray(DXGI_FORMAT_R32_FLOAT, CASCADE_NUM, 1) };
 
         renderPipelineBuilder.Passes.Add<GeometryPass>([&](auto &builder) { builder
+            .Read("Constants.Frame", &GeometryPass::frameConstantsAddress, D3D12_RESOURCE_STATE_GENERIC_READ)
             .Write("GBuffer.Normal", &GeometryPass::gNormalRTV)
             .Write("GBuffer.Albedo", &GeometryPass::gAlbedoRTV)
             .Write("GBuffer.OcclusionRoughnessMetallic", &GeometryPass::gORMRTV)
@@ -71,6 +76,7 @@ void MainWindow::BuildRenderPipeline() {
         }, renderContext.get());
 
         renderPipelineBuilder.Passes.Add<AmbientOcclusionPass>([&](auto &builder) { builder
+            .Read("Constants.Frame", &AmbientOcclusionPass::frameConstantsAddress, D3D12_RESOURCE_STATE_GENERIC_READ)
             .Read("GBuffer.Depth", &AmbientOcclusionPass::gDepthSRV, gDepthSRVDesc)
             .Read("GBuffer.Normal", &AmbientOcclusionPass::gNormalSRV)
             .Write("GBuffer.OcclusionRoughnessMetallic", &AmbientOcclusionPass::gORMRTV);
@@ -81,6 +87,9 @@ void MainWindow::BuildRenderPipeline() {
         }, renderContext.get());
 
         renderPipelineBuilder.Passes.Add<ShadowPass>([&] (auto &builder) { builder
+            .Read("Constants.Frame", &ShadowPass::frameConstantsAddress, D3D12_RESOURCE_STATE_GENERIC_READ)
+            .Read("Constants.Light", &ShadowPass::lightConstantsAddress, D3D12_RESOURCE_STATE_GENERIC_READ)
+            .Read("Constants.CascadeShadow", &ShadowPass::cascadeShadowConstantsAddress, D3D12_RESOURCE_STATE_GENERIC_READ)
             .Read("Shadow.Depth", &ShadowPass::shadowDepthSRV, shadowDepthSRVDesc)
             .Read("GBuffer.Normal", &ShadowPass::gNormalSRV)
             .Read("GBuffer.Depth", &ShadowPass::gDepthSRV, gDepthSRVDesc)
@@ -88,6 +97,8 @@ void MainWindow::BuildRenderPipeline() {
         }, renderContext.get());
 
         renderPipelineBuilder.Passes.Add<LightingPass>([&](auto &builder) { builder
+            .Read("Constants.Frame", &LightingPass::frameConstantsAddress, D3D12_RESOURCE_STATE_GENERIC_READ)
+            .Read("Constants.Light", &LightingPass::lightConstantsAddress, D3D12_RESOURCE_STATE_GENERIC_READ)
             .Read("GBuffer.Normal", &LightingPass::gNormalSRV)
             .Read("GBuffer.Albedo", &LightingPass::gAlbedoSRV)
             .Read("GBuffer.OcclusionRoughnessMetallic", &LightingPass::gORMSRV)
@@ -107,6 +118,9 @@ void MainWindow::BuildRenderPipeline() {
     renderContext->texturePool  = std::make_unique<Vertix::TexturePool>(renderContext->sharedDescriptorHeap->AllocateRange(2048));
     renderContext->modelPool    = std::make_unique<Vertix::ModelPool>();
     renderContext->materialPool = std::make_unique<Vertix::MaterialPool<Vertix::Engine::DefaultMaterialConstants>>(graphicsDevice, 2048);
+    renderContext->frameConstantsBuffer         = static_cast<Vertix::ConstantBuffer<FrameConstants> *>(renderPipeline->GetResource("Constants.Frame"));
+    renderContext->lightConstantsBuffer         = static_cast<Vertix::ConstantBuffer<LightConstants> *>(renderPipeline->GetResource("Constants.Light"));
+    renderContext->cascadeShadowConstantsBuffer = static_cast<Vertix::ConstantBuffer<CascadeShadowConstants> *>(renderPipeline->GetResource("Constants.CascadeShadow"));
 }
 
 void MainWindow::OnInitialize() {
@@ -183,8 +197,6 @@ void MainWindow::OnRender(const double deltaTime) {
 
     dispatcherQueue.FlushQueue();
     renderContext->materialPool->FlushDirty();
-
-    frameCommandList->GetD3D12GraphicsCommandList()->SetDescriptorHeaps(1, renderContext->sharedDescriptorHeap->GetDescriptorHeapAddress());
     renderPipeline->Execute();
 }
 

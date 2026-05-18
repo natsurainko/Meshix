@@ -66,7 +66,7 @@ void ShadowGeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     commandList->RSSetScissorRects(1, &scissorRect);
     {
         commandList->SetGraphicsRootSignature(rootSignature.Get());
-        commandList->SetGraphicsRootConstantBufferView(1, renderContext->cascadeShadowConstantsBuffer.GetGpuVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(1, renderContext->cascadeShadowConstantsBuffer->GetGPUVirtualAddress());
 
         shadowDepthDSV->SetRenderTarget(commandList);
         commandList->SetPipelineState(pipelineState.Get());

@@ -83,7 +83,7 @@ void GeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     constexpr float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetGraphicsRootConstantBufferView(0, renderContext->frameConstantsBuffer.GetGpuVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(0, frameConstantsAddress);
     commandList->SetGraphicsRootShaderResourceView(3, renderContext->materialPool->GetGpuVirtualAddress());
 
     const D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[3] = {

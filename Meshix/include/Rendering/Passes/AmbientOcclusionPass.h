@@ -21,6 +21,8 @@ public:
     const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gNormalSRV = nullptr;
     const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* gORMRTV = nullptr;
 
+    D3D12_GPU_VIRTUAL_ADDRESS frameConstantsAddress = {};
+
 private:
     struct TextureHandles {
         uint32_t gDepthHandle;

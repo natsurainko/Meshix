@@ -22,6 +22,10 @@ public:
     const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* shadowDepthSRV = nullptr;
     const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* shadowMaskRTV = nullptr;
 
+    D3D12_GPU_VIRTUAL_ADDRESS frameConstantsAddress = {};
+    D3D12_GPU_VIRTUAL_ADDRESS lightConstantsAddress = {};
+    D3D12_GPU_VIRTUAL_ADDRESS cascadeShadowConstantsAddress = {};
+
 private:
     struct TextureHandles {
         uint gNormalHandle;

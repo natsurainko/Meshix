@@ -6,10 +6,6 @@
 #define MESHIX_IMGUIPASS_H
 
 #include <imgui/imgui.h>
-#include <imgui/backends/imgui_impl_dx12.h>
-#include <imgui/backends/imgui_impl_win32.h>
-#include <Vertix/Graphics/DescriptorHeap.h>
-#include <Vertix/Graphics/FrameCommandList.h>
 #include <Vertix/Rendering/RenderResourceView.h>
 #include <Vertix/Rendering/Pipeline/RenderPass.h>
 #include <Vertix/Windowing/GameWindow.h>

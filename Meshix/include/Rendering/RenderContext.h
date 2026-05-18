@@ -8,7 +8,7 @@
 #include <memory>
 #include <Vertix.Engine/Camera/PerspectiveCamera.h>
 #include <Vertix.Engine/Effect/Shadow/CascadeShadowMapping.h>
-#include <Vertix/Graphics/Buffers/ConstantBuffer.hpp>
+#include <../../../Vertix/Vertix/include/Vertix/Rendering/Buffers/ConstantBuffer.hpp>
 #include <Vertix/Graphics/Buffers/ConstantBufferPageArray.hpp>
 #include <Vertix.Engine/Helpers/MathHelper.h>
 #include <Vertix.Engine/Helpers/VectorHelper.h>
@@ -34,8 +34,7 @@ public:
         Vertix::GraphicsDevice* graphicsDevice,
         Vertix::FrameCommandList* frameCommandList,
         Vertix::SwapChain* swapChain)
-    : frameConstantsBuffer(graphicsDevice), lightConstantsBuffer(graphicsDevice), cascadeShadowConstantsBuffer(graphicsDevice), objectConstantsBuffer(graphicsDevice, 4096),
-      graphicsDevice(graphicsDevice), swapChain(swapChain)
+    : objectConstantsBuffer(graphicsDevice, 4096), graphicsDevice(graphicsDevice), swapChain(swapChain)
     {
         Vertix::ResourceUploadHeap resourceUploadHeap {};
         frameCommandList->BeginCommand(nullptr);
@@ -53,9 +52,9 @@ public:
     std::vector<std::shared_ptr<Vertix::Engine::SceneObject3D>> sceneObjects;
     std::unique_ptr<Vertix::VertexBuffer> fullScreenVertex;
 
-    Vertix::ConstantBuffer<FrameConstants> frameConstantsBuffer;
-    Vertix::ConstantBuffer<LightConstants> lightConstantsBuffer;
-    Vertix::ConstantBuffer<CascadeShadowConstants> cascadeShadowConstantsBuffer;
+    Vertix::ConstantBuffer<FrameConstants>* frameConstantsBuffer = nullptr;
+    Vertix::ConstantBuffer<LightConstants>* lightConstantsBuffer = nullptr;
+    Vertix::ConstantBuffer<CascadeShadowConstants>* cascadeShadowConstantsBuffer = nullptr;
     Vertix::ConstantBufferPageArray<ObjectConstants> objectConstantsBuffer;
 
     Vertix::DescriptorHeap* sharedDescriptorHeap = nullptr;
@@ -70,12 +69,12 @@ public:
         frameConstants.ViewProjection = frameConstants.View * frameConstants.Projection;
         frameConstants.ViewProjection.Invert(frameConstants.ViewProjectionInverse);
         Vertix::Engine::FillVector4(frameConstants.CameraPosition, perspectiveCamera.GetPosition());
-        frameConstantsBuffer.Fill(frameConstants);
+        frameConstantsBuffer->Fill(frameConstants);
     }
 
     void UpdateLightConstants() {
-        LightConstants.LightDirection.Normalize(LightConstants.LightDirection);
-        lightConstantsBuffer.Fill(LightConstants);
+        lightConstants.LightDirection.Normalize(lightConstants.LightDirection);
+        lightConstantsBuffer->Fill(lightConstants);
     }
 
     void UpdateObjectConstants() {
@@ -93,10 +92,10 @@ public:
             frameConstants.ViewProjection,
             cameraNearPlane,
             cameraFarPlane,
-            LightConstants.LightDirection,
+            lightConstants.LightDirection,
             static_cast<float>(ShadowMapSize)
         );
-        cascadeShadowConstantsBuffer.Fill(cascadeShadowConstants);
+        cascadeShadowConstantsBuffer->Fill(cascadeShadowConstants);
     }
 
     void SetWindowSize(const Vertix::Vector2D<UINT> &size) {
@@ -137,7 +136,7 @@ public:
     const D3D12_RECT* scissorRect = nullptr;
     const D3D12_VIEWPORT* viewport = nullptr;
 
-    LightConstants LightConstants {
+    LightConstants lightConstants {
         .LightDirection = float3 { 0.3f, -0.925f, -0.225f },
         .AmbientIntensity = 0.05f,
         .LightColor = float3 { 1.0f, 1.0f, 1.0f },
