@@ -79,18 +79,18 @@ void AmbientOcclusionPass::Initialize(ID3D12Device10* device) {
         ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState)));
     }
 
-    handles.gNormalHandle = gNormalSRV->slot;
-    handles.gDepthHandle = gDepthSRV->slot;
+    handles.gNormalHandle = gNormalSRV.slot;
+    handles.gDepthHandle = gDepthSRV.slot;
 }
 
 void AmbientOcclusionPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     if (!renderContext->EnableHBAO) return;
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetGraphicsRootConstantBufferView(0, frameConstantsAddress);
+    commandList->SetGraphicsRootConstantBufferView(0, frameConstants);
     commandList->SetGraphicsRoot32BitConstants(1, 2, &handles, 0);
 
-    gORMRTV->SetRenderTarget(commandList);
+    gORMRTV.SetRenderTarget(commandList);
     commandList->SetPipelineState(pipelineState.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     commandList->IASetVertexBuffers(0, 1, &renderContext->fullScreenVertex->d3d12VertexBufferView);

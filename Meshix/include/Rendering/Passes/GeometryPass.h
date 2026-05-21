@@ -5,7 +5,7 @@
 #ifndef MESHIX_GEOMETRYPASS_H
 #define MESHIX_GEOMETRYPASS_H
 
-#include <Vertix/Rendering/RenderResourceView.h>
+#include <Vertix/Graphics/DescriptorView.h>
 #include <Vertix/Rendering/Pipeline/RenderPass.h>
 
 #include "Rendering/RenderContext.h"
@@ -17,12 +17,12 @@ public:
     void Initialize(ID3D12Device10* device) override;
     void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* gNormalRTV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* gAlbedoRTV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* gORMRTV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::DepthStencil>* gDepthDSV = nullptr;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::RenderTarget> gNormalRTV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::RenderTarget> gAlbedoRTV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::RenderTarget> gORMRTV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::DepthWrite>   gDepthDSV;
 
-    D3D12_GPU_VIRTUAL_ADDRESS frameConstantsAddress = {};
+    D3D12_GPU_VIRTUAL_ADDRESS frameConstants = {};
 
 private:
     RenderContext* renderContext;

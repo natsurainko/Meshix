@@ -83,20 +83,20 @@ void GeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     constexpr float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetGraphicsRootConstantBufferView(0, frameConstantsAddress);
+    commandList->SetGraphicsRootConstantBufferView(0, frameConstants);
     commandList->SetGraphicsRootShaderResourceView(3, renderContext->materialPool->GetGpuVirtualAddress());
 
     const D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[3] = {
-        gNormalRTV->cpuHandle,
-        gAlbedoRTV->cpuHandle,
-        gORMRTV->cpuHandle,
+        gNormalRTV.cpuHandle,
+        gAlbedoRTV.cpuHandle,
+        gORMRTV.cpuHandle,
     };
-    commandList->OMSetRenderTargets(3, rtvHandles, FALSE, &gDepthDSV->cpuHandle);
+    commandList->OMSetRenderTargets(3, rtvHandles, FALSE, &gDepthDSV.cpuHandle);
 
-    gNormalRTV->Clear(commandList, clearColor);
-    gAlbedoRTV->Clear(commandList, clearColor);
-    gORMRTV->Clear(commandList, clearColor);
-    gDepthDSV->ClearDepth(commandList, 1.0f);
+    gNormalRTV.Clear(commandList, clearColor);
+    gAlbedoRTV.Clear(commandList, clearColor);
+    gORMRTV.Clear(commandList, clearColor);
+    gDepthDSV.ClearDepth(commandList, 1.0f);
 
     commandList->SetPipelineState(pipelineState.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

@@ -64,24 +64,24 @@ void ShadowPass::Initialize(ID3D12Device10* device) {
         ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState)));
     }
 
-    handles.gNormalHandle = gNormalSRV->slot;
-    handles.gDepthHandle = gDepthSRV->slot;
-    handles.ShadowDepthHandle = shadowDepthSRV->slot;
+    handles.gNormalHandle = gNormalSRV.slot;
+    handles.gDepthHandle = gDepthSRV.slot;
+    handles.ShadowDepthHandle = shadowDepthSRV.slot;
 }
 
 void ShadowPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     constexpr float clearColor[] = { 1.0f, 0.0f, 0.0f, 0.0f };
 
-    shadowMaskRTV->Clear(commandList, clearColor);
+    shadowMaskRTV.Clear(commandList, clearColor);
     if (!renderContext->EnablePCSS) return;
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetGraphicsRootConstantBufferView(0, lightConstantsAddress);
-    commandList->SetGraphicsRootConstantBufferView(1, cascadeShadowConstantsAddress);
-    commandList->SetGraphicsRootConstantBufferView(2, frameConstantsAddress);
+    commandList->SetGraphicsRootConstantBufferView(0, lightConstants);
+    commandList->SetGraphicsRootConstantBufferView(1, cascadeShadowConstants);
+    commandList->SetGraphicsRootConstantBufferView(2, frameConstants);
     commandList->SetGraphicsRoot32BitConstants(3, 3, &handles, 0);
 
-    shadowMaskRTV->SetRenderTarget(commandList);
+    shadowMaskRTV.SetRenderTarget(commandList);
 
     commandList->SetPipelineState(pipelineState.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);

@@ -5,7 +5,7 @@
 #ifndef MESHIX_DIRECTIONALSHADOWPASS_H
 #define MESHIX_DIRECTIONALSHADOWPASS_H
 
-#include <Vertix/Rendering/RenderResourceView.h>
+#include <Vertix/Graphics/DescriptorView.h>
 #include <Vertix/Rendering/Pipeline/RenderPass.h>
 
 #include "Rendering/RenderContext.h"
@@ -17,14 +17,14 @@ public:
     void Initialize(ID3D12Device10 *device) override;
     void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gDepthSRV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gNormalSRV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* shadowDepthSRV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* shadowMaskRTV = nullptr;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::PixelShaderResource> gDepthSRV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::PixelShaderResource> gNormalSRV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::PixelShaderResource> shadowDepthSRV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::RenderTarget> shadowMaskRTV;
 
-    D3D12_GPU_VIRTUAL_ADDRESS frameConstantsAddress = {};
-    D3D12_GPU_VIRTUAL_ADDRESS lightConstantsAddress = {};
-    D3D12_GPU_VIRTUAL_ADDRESS cascadeShadowConstantsAddress = {};
+    D3D12_GPU_VIRTUAL_ADDRESS frameConstants = {};
+    D3D12_GPU_VIRTUAL_ADDRESS lightConstants = {};
+    D3D12_GPU_VIRTUAL_ADDRESS cascadeShadowConstants = {};
 
 private:
     struct TextureHandles {

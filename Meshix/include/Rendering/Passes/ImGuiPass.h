@@ -6,7 +6,7 @@
 #define MESHIX_IMGUIPASS_H
 
 #include <imgui/imgui.h>
-#include <Vertix/Rendering/RenderResourceView.h>
+#include <Vertix/Graphics/DescriptorView.h>
 #include <Vertix/Rendering/Pipeline/RenderPass.h>
 #include <Vertix/Windowing/GameWindow.h>
 
@@ -24,7 +24,7 @@ public:
     void Initialize(ID3D12Device10* device) override;
     void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* currentFrameRTV = nullptr;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::RenderTarget> currentFrameRTV;
 
 private:
     ImGuiIO* io = nullptr;

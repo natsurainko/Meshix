@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <Vertix.Engine/Camera/PerspectiveCamera.h>
+#include <Vertix/Graphics/DescriptorHeap.h>
 #include <Vertix.Engine/Effect/Shadow/CascadeShadowMapping.h>
 #include <Vertix/Graphics/Buffers/ConstantBufferPageArray.hpp>
 #include <Vertix/Rendering/Buffers/ConstantBuffer.hpp>
@@ -32,9 +33,8 @@ class RenderContext {
 public:
     explicit RenderContext(
         Vertix::GraphicsDevice* graphicsDevice,
-        Vertix::FrameCommandList* frameCommandList,
-        Vertix::SwapChain* swapChain)
-    : objectConstantsBuffer(graphicsDevice, 4096), graphicsDevice(graphicsDevice), swapChain(swapChain)
+        Vertix::FrameCommandList* frameCommandList)
+    : objectConstantsBuffer(graphicsDevice, 4096), graphicsDevice(graphicsDevice)
     {
         Vertix::ResourceUploadHeap resourceUploadHeap {};
         frameCommandList->BeginCommand(nullptr);
@@ -64,29 +64,16 @@ public:
 
     Vertix::Vector2D<UINT> windowSize;
 
-    void UpdateFrameConstants() {
+    void OnFrameUpdate() {
         perspectiveCamera.GetViewMatrix(frameConstants.View);
         frameConstants.ViewProjection = frameConstants.View * frameConstants.Projection;
         frameConstants.ViewProjection.Invert(frameConstants.ViewProjectionInverse);
         Vertix::Engine::FillVector4(frameConstants.CameraPosition, perspectiveCamera.GetPosition());
         frameConstantsBuffer->Fill(frameConstants);
-    }
 
-    void UpdateLightConstants() {
         lightConstants.LightDirection.Normalize(lightConstants.LightDirection);
         lightConstantsBuffer->Fill(lightConstants);
-    }
 
-    void UpdateObjectConstants() {
-        for (UINT i = 0; i < sceneObjects.size(); i++) {
-            const auto &sceneObject = sceneObjects[i];
-            objectConstants.World = sceneObject->GetWorldMatrix();
-            objectConstants.WorldInverseTranspose = sceneObject->GetWorldInverseTranspose();
-            objectConstantsBuffer.FillAt(i, objectConstants);
-        }
-    }
-
-    void UpdateCascadeShadowConstants() {
         Vertix::Engine::SetupCascades<CASCADE_NUM>(
             cascadeShadowConstants.CascadeDatas,
             frameConstants.ViewProjection,
@@ -96,6 +83,13 @@ public:
             static_cast<float>(ShadowMapSize)
         );
         cascadeShadowConstantsBuffer->Fill(cascadeShadowConstants);
+
+        for (UINT i = 0; i < sceneObjects.size(); i++) {
+            const auto &sceneObject = sceneObjects[i];
+            objectConstants.World = sceneObject->GetWorldMatrix();
+            objectConstants.WorldInverseTranspose = sceneObject->GetWorldInverseTranspose();
+            objectConstantsBuffer.FillAt(i, objectConstants);
+        }
     }
 
     void SetWindowSize(const Vertix::Vector2D<UINT> &size) {
@@ -120,7 +114,6 @@ public:
 
 private:
     Vertix::GraphicsDevice* graphicsDevice = nullptr;
-    Vertix::SwapChain*      swapChain      = nullptr;
 
     FrameConstants frameConstants{};
     ObjectConstants objectConstants{};

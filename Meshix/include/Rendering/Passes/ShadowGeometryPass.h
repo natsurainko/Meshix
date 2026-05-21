@@ -5,7 +5,7 @@
 #ifndef MESHIX_LIGHTVIEWDEPTHPASS_H
 #define MESHIX_LIGHTVIEWDEPTHPASS_H
 
-#include <Vertix/Rendering/RenderResourceView.h>
+#include <Vertix/Graphics/DescriptorView.h>
 #include <Vertix/Rendering/Pipeline/RenderPass.h>
 
 #include "Rendering/RenderContext.h"
@@ -17,7 +17,10 @@ public:
     void Initialize(ID3D12Device10* device) override;
     void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::DepthStencil>* shadowDepthDSV = nullptr;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::DepthWrite> shadowDepthDSV;
+
+    D3D12_GPU_VIRTUAL_ADDRESS cascadeShadowConstants = {};
+
 private:
     RenderContext* renderContext;
 

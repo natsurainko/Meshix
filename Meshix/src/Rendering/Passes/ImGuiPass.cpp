@@ -6,6 +6,7 @@
 
 #include <imgui/backends/imgui_impl_dx12.h>
 #include <imgui/backends/imgui_impl_win32.h>
+#include <Vertix/Graphics/DescriptorHeap.h>
 
 ImGuiPass::~ImGuiPass() {
     if (ImGui::GetCurrentContext() == nullptr) return;
@@ -158,6 +159,6 @@ void ImGuiPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     }
     ImGui::Render();
 
-    currentFrameRTV->SetRenderTarget(commandList);
+    currentFrameRTV.SetRenderTarget(commandList);
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 }

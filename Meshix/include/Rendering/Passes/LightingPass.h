@@ -5,7 +5,7 @@
 #ifndef MESHIX_LIGHTINGPASS_H
 #define MESHIX_LIGHTINGPASS_H
 
-#include <Vertix/Rendering/RenderResourceView.h>
+#include <Vertix/Graphics/DescriptorView.h>
 #include <Vertix/Rendering/Pipeline/RenderPass.h>
 
 #include "Rendering/RenderContext.h"
@@ -17,15 +17,15 @@ public:
     void Initialize(ID3D12Device10* device) override;
     void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gNormalSRV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gAlbedoSRV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gORMSRV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* gDepthSRV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::ShaderResource>* shadowMaskSRV = nullptr;
-    const Vertix::RenderResourceView<Vertix::RenderResourceViewType::RenderTarget>* currentFrameRTV = nullptr;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::PixelShaderResource> gNormalSRV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::PixelShaderResource> gAlbedoSRV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::PixelShaderResource> gORMSRV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::PixelShaderResource> gDepthSRV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::PixelShaderResource> shadowMaskSRV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::RenderTarget> currentFrameRTV;
 
-    D3D12_GPU_VIRTUAL_ADDRESS frameConstantsAddress = {};
-    D3D12_GPU_VIRTUAL_ADDRESS lightConstantsAddress = {};
+    D3D12_GPU_VIRTUAL_ADDRESS frameConstants = {};
+    D3D12_GPU_VIRTUAL_ADDRESS lightConstants = {};
 
 private:
     struct TextureHandles {
