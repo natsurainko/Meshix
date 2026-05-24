@@ -73,7 +73,7 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     constexpr float clearColor[] = { 1.0f, 0.0f, 0.0f, 0.0f };
 
     shadowMaskRTV.Clear(commandList, clearColor);
-    if (!renderContext->EnablePCSS) return;
+    return;
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
     commandList->SetGraphicsRootConstantBufferView(0, lightConstants);

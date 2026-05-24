@@ -2,6 +2,7 @@
 set_target_properties(Meshix PROPERTIES LINKER_LANGUAGE CXX)
 target_sources(Meshix
     PRIVATE
+        src/Rendering/Passes/CullingPass.cpp
         src/Rendering/Passes/GeometryPass.cpp
         src/Rendering/Passes/ShadowGeometryPass.cpp
         src/Rendering/Passes/ShadowPass.cpp
@@ -37,6 +38,7 @@ set(HLSL_SHADER_FILES
         shaders/poisson.hlsli
         shaders/depth.hlsli
 
+        shaders/passes/CullingPass.hlsl
         shaders/passes/AmbientOcclusionPass.hlsl
         shaders/passes/GeometryPass.hlsl
         shaders/passes/LightingPass.hlsl
@@ -44,6 +46,11 @@ set(HLSL_SHADER_FILES
         shaders/passes/ShadowPass.hlsl
 )
 
+set_source_files_properties(shaders/passes/CullingPass.hlsl PROPERTIES
+        ShaderModel  "6_6"
+        CSMain       "CSMain"
+        ByteCodeName "CULLING_PASS"
+)
 set_source_files_properties(shaders/passes/AmbientOcclusionPass.hlsl PROPERTIES
         ShaderModel  "6_6"
         VSMain       "VSMain"

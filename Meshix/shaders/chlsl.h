@@ -14,12 +14,15 @@ using float4   = DirectX::SimpleMath::Vector4;
 using float3   = DirectX::SimpleMath::Vector3;
 using float2   = DirectX::SimpleMath::Vector2;
 using uint     = std::uint32_t;
+using uint64   = std::uint64_t;
 
 #else
 
 #define IDENTITY
 #define ZERO
 #define ONE
+
+using uint64   = uint2;
 
 #endif
 #endif // CHLSL_H

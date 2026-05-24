@@ -1,11 +1,20 @@
 #include "../structures.h"
 
+cbuffer Shared : register(b0) {
+    uint MaterialHandle;
+}
+
 // ====================================================
 //                    Vertex Shader
 // ====================================================
 
-ConstantBuffer<FrameConstants>  frameConstants  : register(b0);
-ConstantBuffer<ObjectConstants> objectConstants : register(b1);
+cbuffer VS : register(b1) {
+    uint ObjectHandle;
+}
+
+ConstantBuffer<FrameConstants> frameConstants  : register(b2);
+
+StructuredBuffer<ObjectConstants> objectConstants : register(t0);
 
 struct VSInput {
     float3 Position  : POSITION;
@@ -24,20 +33,19 @@ struct VSOutput {
 };
 
 VSOutput VSMain(VSInput vsInput) {
+    ObjectConstants object = objectConstants[ObjectHandle];
     VSOutput output;
-    output.FragNormal = mul((float3x3)objectConstants.WorldInverseTranspose, vsInput.Normal);
-    output.Tangent    = mul((float3x3)objectConstants.WorldInverseTranspose, vsInput.Tangent);
-    output.Bitangent  = mul((float3x3)objectConstants.WorldInverseTranspose, vsInput.Bitangent);
+    output.FragNormal = mul((float3x3)object.WorldInverseTranspose, vsInput.Normal);
+    output.Tangent    = mul((float3x3)object.WorldInverseTranspose, vsInput.Tangent);
+    output.Bitangent  = mul((float3x3)object.WorldInverseTranspose, vsInput.Bitangent);
     output.TexCoord   = vsInput.TexCoord;
-    output.Position   = mul(frameConstants.ViewProjection, mul(objectConstants.World, float4(vsInput.Position, 1.0f)));
+    output.Position   = mul(frameConstants.ViewProjection, mul(object.World, float4(vsInput.Position, 1.0f)));
     return output;
 }
 
 // ====================================================
 //                    Pixel Shader
 // ====================================================
-
-uint MaterialHandle : register(b0);
 
 SamplerState AnisotropicSampler : register(s0);
 

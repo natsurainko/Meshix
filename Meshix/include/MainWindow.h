@@ -36,6 +36,8 @@ private:
     void BuildRenderPipeline();
 
     ImGuiIO* imGuiIO = nullptr;
+    ID3D12GraphicsCommandList* commandList = nullptr;
+
     std::unique_ptr<Vertix::RenderPipeline> renderPipeline;
     std::unique_ptr<RenderContext> renderContext;
 
@@ -44,10 +46,6 @@ private:
 
     Vertix::Engine::DefaultPositionController defaultPositionController {&keyboardControllerInput};
     Vertix::Engine::DefaultRotationController defaultRotationController {&mouseControllerInput};
-
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> copyCommandQueue;
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> computeCommandQueue;
 };
-
 
 #endif //MESHIX_MAINWINDOW_H

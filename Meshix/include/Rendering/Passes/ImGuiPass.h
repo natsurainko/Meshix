@@ -10,14 +10,15 @@
 #include <Vertix/Rendering/Pipeline/RenderPass.h>
 #include <Vertix/Windowing/GameWindow.h>
 
+#include "Gui/GuiContext.h"
 #include "Rendering/RenderContext.h"
 
 class ImGuiPass : public Vertix::RenderPass {
 public:
     explicit ImGuiPass(
-        const Vertix::GameWindow* window,
+        Vertix::GameWindow* window,
         RenderContext* renderContext)
-    : renderContext(renderContext), window(window), guiContext(window->GetSwapChain()) {}
+    : renderContext(renderContext), window(window), guiContext(window, renderContext) {}
 
     ~ImGuiPass() override;
 
@@ -29,7 +30,7 @@ public:
 private:
     ImGuiIO* io = nullptr;
     RenderContext* renderContext;
-    const Vertix::GameWindow* window;
+    Vertix::GameWindow* window;
     GuiContext guiContext;
 };
 

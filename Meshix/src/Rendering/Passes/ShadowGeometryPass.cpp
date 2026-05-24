@@ -59,8 +59,7 @@ void ShadowGeometryPass::Initialize(ID3D12Device10* device) {
 }
 
 void ShadowGeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
-    shadowDepthDSV.ClearDepth(commandList);
-    if (!renderContext->EnablePCSS) return;
+    /*shadowDepthDSV.ClearDepth(commandList);
 
     commandList->RSSetViewports(1, &viewport);
     commandList->RSSetScissorRects(1, &scissorRect);
@@ -91,5 +90,5 @@ void ShadowGeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
         }
     }
     commandList->RSSetViewports(1, renderContext->viewport);
-    commandList->RSSetScissorRects(1, renderContext->scissorRect);
+    commandList->RSSetScissorRects(1, renderContext->scissorRect);*/
 }

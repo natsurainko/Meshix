@@ -2,11 +2,11 @@
 #define CONSTANTS_BUFFER_STRUCTS_H
 
 #include "chlsl.h"
-#include "csm.h"
 
 #define CASCADE_NUM 5
 
 #ifndef __cplusplus
+#include "csm.h"
 struct MaterialConstants {
     uint baseColorHandle;
     uint metallicRoughnessHandle;
@@ -28,11 +28,25 @@ struct MaterialConstants {
     int   doubleSided;
     float padding;
 };
-
-struct CascadeShadowConstants {
-    CascadeData CascadeDatas[CASCADE_NUM];
-};
+#else
+#include <Vertix.Engine/Effect/Shadow/CascadeShadowMapping.h>
+#include <Vertix.Engine/Primitive/DefaultPBRMaterial.h>
+using CascadeData       = Vertix::Engine::CascadeData;
+using MaterialConstants = Vertix::Engine::DefaultMaterialConstants;
 #endif
+
+struct BoundingSphere {
+    float3 Center;
+    float  Radius;
+};
+
+struct BoundingBox {
+    float3 Center;
+    float  Padding_1;
+
+    float3 Extents;
+    float  Padding_2;
+};
 
 struct FrameConstants {
     float4x4 View                  IDENTITY;
@@ -46,6 +60,8 @@ struct FrameConstants {
 
     float2 FrameResolution;
     float2 FrameResolutionInverse;
+
+    float4 FrustumPlanes[6]; // Left / Right / Bottom / Top / Near / Far
 };
 
 struct LightConstants {
@@ -56,9 +72,54 @@ struct LightConstants {
     float  LightIntensity;
 };
 
+struct CascadeShadowConstants {
+    CascadeData CascadeDatas[CASCADE_NUM];
+};
+
 struct ObjectConstants {
     float4x4 World                 IDENTITY;
     float4x4 WorldInverseTranspose IDENTITY;
+};
+
+struct CullingViewConstants {
+    float4 FrustumPlanes[6];
+
+    uint IndirectCommandBufferHandle;
+    uint VisibleCountBufferHandle;
+    uint MaxCommandCount;
+    uint Padding;
+};
+
+struct MeshCullingConstants {
+    uint ObjectHandle   ZERO;
+    uint MaterialHandle ZERO;
+    uint IndexCount     ZERO;
+    uint VertexCount    ZERO;
+
+    uint64 IndexBufferAddress;
+    uint64 VertexBufferAddress;
+
+    BoundingBox LocalBounds;
+};
+
+struct MeshIndirectCommand {
+    uint MaterialHandle;
+    uint ObjectHandle;
+
+    uint64 VBAddress;
+    uint   VBSize;
+    uint   VBStride;
+
+    uint64 IBAddress;
+    uint   IBSize;
+    uint   IBFormat;
+
+    uint IndexCountPerInstance;
+    uint InstanceCount;
+    uint StartIndexLocation;
+    int  BaseVertexLocation;
+    uint StartInstanceLocation;
+    float Padding1;
 };
 
 #endif // CONSTANTS_BUFFER_STRUCTS_H

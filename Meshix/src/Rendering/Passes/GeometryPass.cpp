@@ -22,14 +22,15 @@ void GeometryPass::Initialize(ID3D12Device10* device) {
         staticSampler.MaxAnisotropy = 4;
         staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-        CD3DX12_ROOT_PARAMETER rootParameters[4];
-        rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-        rootParameters[1].InitAsConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-        rootParameters[2].InitAsConstants(1, 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
-        rootParameters[3].InitAsShaderResourceView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+        CD3DX12_ROOT_PARAMETER rootParameters[5];
+        rootParameters[0].InitAsConstants(1, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+        rootParameters[1].InitAsConstants(1, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+        rootParameters[2].InitAsConstantBufferView(2, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+        rootParameters[3].InitAsShaderResourceView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+        rootParameters[4].InitAsShaderResourceView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 
         D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-        rootSignatureDesc.NumParameters = 4;
+        rootSignatureDesc.NumParameters = 5;
         rootSignatureDesc.pParameters = rootParameters;
         rootSignatureDesc.NumStaticSamplers = 1;
         rootSignatureDesc.pStaticSamplers = &staticSampler;
@@ -77,14 +78,42 @@ void GeometryPass::Initialize(ID3D12Device10* device) {
 
         ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState)));
     }
+
+    {
+        D3D12_INDIRECT_ARGUMENT_DESC argDescs[5] = {};
+        argDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+        argDescs[0].Constant.RootParameterIndex = 0;
+        argDescs[0].Constant.DestOffsetIn32BitValues = 0;
+        argDescs[0].Constant.Num32BitValuesToSet = 1;
+
+        argDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+        argDescs[1].Constant.RootParameterIndex = 1;
+        argDescs[1].Constant.DestOffsetIn32BitValues = 0;
+        argDescs[1].Constant.Num32BitValuesToSet = 1;
+
+        argDescs[2].Type = D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW;
+        argDescs[2].VertexBuffer.Slot = 0;
+
+        argDescs[3].Type = D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW;
+        argDescs[4].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+
+        D3D12_COMMAND_SIGNATURE_DESC desc = {};
+        desc.pArgumentDescs   = argDescs;
+        desc.NumArgumentDescs = 5;
+        desc.ByteStride       = sizeof(MeshIndirectCommand);
+        desc.NodeMask         = 0;
+
+        ThrowIfFailed(device->CreateCommandSignature(&desc, rootSignature.Get(), IID_PPV_ARGS(&commandSignature)));
+    }
 }
 
 void GeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     constexpr float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetGraphicsRootConstantBufferView(0, frameConstants);
-    commandList->SetGraphicsRootShaderResourceView(3, renderContext->materialPool->GetGpuVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(2, frameConstants);
+    commandList->SetGraphicsRootShaderResourceView(3, objectStructured);
+    commandList->SetGraphicsRootShaderResourceView(4, materialStructured);
 
     const D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[3] = {
         gNormalRTV.cpuHandle,
@@ -101,7 +130,16 @@ void GeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     commandList->SetPipelineState(pipelineState.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    for (UINT i = 0; i < renderContext->sceneObjects.size(); ++i) {
+    commandList->ExecuteIndirect(
+        commandSignature.Get(),
+        65535,
+        indirectCommandsBuffer->GetResource(),
+        0,
+        visibleCountBuffer->GetResource(),
+        0
+    );
+
+    /*for (UINT i = 0; i < renderContext->sceneObjects.size(); ++i) {
         const auto &sceneObject = renderContext->sceneObjects[i];
         commandList->SetGraphicsRootConstantBufferView(1, renderContext->objectConstantsBuffer.GetGpuVirtualAddressAt(i));
 
@@ -119,5 +157,5 @@ void GeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
             commandList->IASetIndexBuffer(&mesh.IndexBuffer->d3d12IndexBufferView);
             commandList->DrawIndexedInstanced(mesh.IndexBuffer->indexCount, 1, 0, 0, 0);
         }
-    }
+    }*/
 }

@@ -26,7 +26,7 @@ void AmbientOcclusionPass::Initialize(ID3D12Device10* device) {
         rootSignatureDesc.pStaticSamplers = &pointSampler;
         rootSignatureDesc.Flags =
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-                D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 
         Microsoft::WRL::ComPtr<ID3DBlob> signature;
         Microsoft::WRL::ComPtr<ID3DBlob> error;
@@ -84,8 +84,6 @@ void AmbientOcclusionPass::Initialize(ID3D12Device10* device) {
 }
 
 void AmbientOcclusionPass::Execute(ID3D12GraphicsCommandList5* commandList) {
-    if (!renderContext->EnableHBAO) return;
-
     commandList->SetGraphicsRootSignature(rootSignature.Get());
     commandList->SetGraphicsRootConstantBufferView(0, frameConstants);
     commandList->SetGraphicsRoot32BitConstants(1, 2, &handles, 0);

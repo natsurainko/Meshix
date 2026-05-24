@@ -89,10 +89,7 @@ void ImGuiPass::Execute(ID3D12GraphicsCommandList5* commandList) {
 
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("Scene")) {
-                if (ImGui::MenuItem("New",  "Ctrl+N")) { }
-                if (ImGui::MenuItem("Open", "Ctrl+O")) { }
-                ImGui::Separator();
-                if (ImGui::MenuItem("Exit")) { exit(0); }
+                if (ImGui::MenuItem("Import glTF Model",  "Ctrl+I")) guiContext.OnModelImportClicked();
                 ImGui::EndMenu();
             }
 

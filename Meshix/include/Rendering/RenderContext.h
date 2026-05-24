@@ -8,7 +8,6 @@
 #include <memory>
 #include <Vertix.Engine/Camera/PerspectiveCamera.h>
 #include <Vertix/Graphics/DescriptorHeap.h>
-#include <Vertix.Engine/Effect/Shadow/CascadeShadowMapping.h>
 #include <Vertix/Graphics/Buffers/ConstantBufferPageArray.hpp>
 #include <Vertix/Rendering/Buffers/ConstantBuffer.hpp>
 #include <Vertix.Engine/Helpers/MathHelper.h>
@@ -21,20 +20,22 @@
 #include <Vertix/Pool/TexturePool.hpp>
 
 #include "../shaders/structures.h"
-#include "Gui/GuiContext.h"
 
 #define SHADER_BYTECODE(T) CD3DX12_SHADER_BYTECODE(T, sizeof(T))
 
-struct CascadeShadowConstants {
-    Vertix::Engine::CascadeData CascadeDatas[CASCADE_NUM];
-};
+struct ObjectTag {};
+using ObjectHandle = Vertix::ResourceHandle<ObjectTag>;
 
 class RenderContext {
+    struct MeshCullingConstantsRange {
+        uint32_t startIndex;
+        uint32_t count;
+    };
+
 public:
     explicit RenderContext(
         Vertix::GraphicsDevice* graphicsDevice,
-        Vertix::FrameCommandList* frameCommandList)
-    : objectConstantsBuffer(graphicsDevice, 4096), graphicsDevice(graphicsDevice)
+        Vertix::FrameCommandList* frameCommandList) : graphicsDevice(graphicsDevice)
     {
         Vertix::ResourceUploadHeap resourceUploadHeap {};
         frameCommandList->BeginCommand(nullptr);
@@ -42,25 +43,38 @@ public:
         frameCommandList->EndCommand();
         frameCommandList->WaitForCommand();
 
+        graphicsDevice->CreateCommandQueue(copyCommandQueue, { .Type = D3D12_COMMAND_LIST_TYPE_COPY, .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE });
+        graphicsDevice->CreateCommandQueue(computeCommandQueue, { .Type = D3D12_COMMAND_LIST_TYPE_COMPUTE, .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE });
+        sharedDirectCommandList = std::make_unique<Vertix::GraphicsCommandList>(graphicsDevice->GetD3D12Device(), frameCommandList->GetD3D12CommandQueue(), D3D12_COMMAND_LIST_TYPE_DIRECT);
+
         perspectiveCamera.SetPosition({ -8.80743f, 1.59221947f, -0.85825783f });
         perspectiveCamera.SetOrientation({ 0.0622985959f, -0.766231537f, 0.07516095f, 0.635105431f });
 
         frameConstants.NearFarProjScale.x = cameraNearPlane;
         frameConstants.NearFarProjScale.y = cameraFarPlane;
+
+        currentCullingConstantsIndex = 0;
     }
 
-    std::vector<std::shared_ptr<Vertix::Engine::SceneObject3D>> sceneObjects;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> copyCommandQueue;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> computeCommandQueue;
+    std::unique_ptr<Vertix::GraphicsCommandList> sharedDirectCommandList;
+
     std::unique_ptr<Vertix::VertexBuffer> fullScreenVertex;
 
     Vertix::ConstantBuffer<FrameConstants>* frameConstantsBuffer = nullptr;
     Vertix::ConstantBuffer<LightConstants>* lightConstantsBuffer = nullptr;
     Vertix::ConstantBuffer<CascadeShadowConstants>* cascadeShadowConstantsBuffer = nullptr;
-    Vertix::ConstantBufferPageArray<ObjectConstants> objectConstantsBuffer;
+
+    Vertix::StructuredBuffer<MaterialConstants>* materialStructuredBuffer = nullptr;
+    Vertix::StructuredBuffer<ObjectConstants>* objectStructuredBuffer = nullptr;
+    Vertix::StructuredBuffer<MeshCullingConstants>* meshCullingStructuredBuffer = nullptr;
 
     Vertix::DescriptorHeap* sharedDescriptorHeap = nullptr;
     std::unique_ptr<Vertix::TexturePool> texturePool;
     std::unique_ptr<Vertix::ModelPool>   modelPool;
-    std::unique_ptr<Vertix::MaterialPool<Vertix::Engine::DefaultMaterialConstants>> materialPool;
+    std::unique_ptr<Vertix::MaterialPool<MaterialConstants>> materialPool;
+    std::unique_ptr<Vertix::ResourcePool<Vertix::Engine::SceneObject3D, ObjectHandle>> objectPool;
 
     Vertix::Vector2D<UINT> windowSize;
 
@@ -69,6 +83,7 @@ public:
         frameConstants.ViewProjection = frameConstants.View * frameConstants.Projection;
         frameConstants.ViewProjection.Invert(frameConstants.ViewProjectionInverse);
         Vertix::Engine::FillVector4(frameConstants.CameraPosition, perspectiveCamera.GetPosition());
+        Vertix::Engine::ExtractFrustumPlanes(frameConstants.ViewProjection, frameConstants.FrustumPlanes);
         frameConstantsBuffer->Fill(frameConstants);
 
         lightConstants.LightDirection.Normalize(lightConstants.LightDirection);
@@ -83,13 +98,45 @@ public:
             static_cast<float>(ShadowMapSize)
         );
         cascadeShadowConstantsBuffer->Fill(cascadeShadowConstants);
+    }
 
-        for (UINT i = 0; i < sceneObjects.size(); i++) {
-            const auto &sceneObject = sceneObjects[i];
-            objectConstants.World = sceneObject->GetWorldMatrix();
-            objectConstants.WorldInverseTranspose = sceneObject->GetWorldInverseTranspose();
-            objectConstantsBuffer.FillAt(i, objectConstants);
+    void AddSceneObject(std::unique_ptr<Vertix::Engine::SceneObject3D> sceneObject) {
+        const Vertix::Engine::SceneObject3D* object = sceneObject.get();
+        const ObjectHandle handle = objectPool->Allocate(std::move(sceneObject));
+
+        std::vector<MeshCullingConstants> meshCullingConstants;
+        for (const auto &mesh : object->SceneModel->Meshes) {
+            meshCullingConstants.emplace_back(MeshCullingConstants {
+                .ObjectHandle = handle.slot,
+                .MaterialHandle = mesh.Material.slot,
+                .IndexCount = mesh.IndexBuffer->indexCount,
+                .VertexCount = mesh.VertexBuffer->vertexCount,
+                .IndexBufferAddress = mesh.IndexBuffer->d3d12Resource->GetGPUVirtualAddress(),
+                .VertexBufferAddress = mesh.VertexBuffer->d3d12Resource->GetGPUVirtualAddress(),
+                .LocalBounds = BoundingBox {
+                    .Center = mesh.BoundingBox.Center,
+                    .Extents = mesh.BoundingBox.Extents,
+                }
+            });
         }
+
+        const ObjectConstants objectConstants = {
+            .World = object->GetWorldMatrix(),
+            .WorldInverseTranspose = object->GetWorldInverseTranspose(),
+        };
+
+        sharedDirectCommandList->BeginCommand(nullptr);
+        {
+            const auto copyCommandList = sharedDirectCommandList->GetD3D12GraphicsCommandList().Get();
+            objectStructuredBuffer->Fill(copyCommandList, handle.slot - 1, objectConstants);
+            meshCullingStructuredBuffer->FillRange(copyCommandList, currentCullingConstantsIndex, meshCullingConstants);
+        }
+        sharedDirectCommandList->EndCommand();
+        sharedDirectCommandList->WaitForCommand();
+
+        auto count = static_cast<uint32_t>(meshCullingConstants.size());
+        meshCullingConstantsRange.emplace_back(currentCullingConstantsIndex, count);
+        currentCullingConstantsIndex += count;
     }
 
     void SetWindowSize(const Vertix::Vector2D<UINT> &size) {
@@ -112,16 +159,21 @@ public:
         return &perspectiveCamera;
     }
 
+    [[nodiscard]]
+    const uint32_t& GetMeshCount() const noexcept {
+        return currentCullingConstantsIndex;
+    }
+
 private:
     Vertix::GraphicsDevice* graphicsDevice = nullptr;
 
-    FrameConstants frameConstants{};
-    ObjectConstants objectConstants{};
-    CascadeShadowConstants cascadeShadowConstants{};
-public:
-    bool EnablePCSS = true;
-    bool EnableHBAO = true;
+    FrameConstants frameConstants = {};
+    CascadeShadowConstants cascadeShadowConstants = {};
 
+    uint32_t currentCullingConstantsIndex;
+    std::vector<MeshCullingConstantsRange> meshCullingConstantsRange;
+
+public:
     const uint32_t ShadowMapSize = 2048;
     const float cameraNearPlane = 0.1f;
     const float cameraFarPlane = 100.0f;

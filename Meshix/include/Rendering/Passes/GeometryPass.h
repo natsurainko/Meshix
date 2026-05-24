@@ -23,12 +23,18 @@ public:
     Vertix::DescriptorView<Vertix::RenderResourceUsage::DepthWrite>   gDepthDSV;
 
     D3D12_GPU_VIRTUAL_ADDRESS frameConstants = {};
+    D3D12_GPU_VIRTUAL_ADDRESS objectStructured = {};
+    D3D12_GPU_VIRTUAL_ADDRESS materialStructured = {};
+
+    Vertix::RenderResource* indirectCommandsBuffer;
+    Vertix::RenderResource* visibleCountBuffer;
 
 private:
     RenderContext* renderContext;
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
+    Microsoft::WRL::ComPtr<ID3D12CommandSignature> commandSignature;
 };
 
 #endif //MESHIX_GEOMETRYPASS_H
