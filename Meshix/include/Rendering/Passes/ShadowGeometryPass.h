@@ -19,13 +19,20 @@ public:
 
     Vertix::DescriptorView<Vertix::RenderResourceUsage::DepthWrite> shadowDepthDSV;
 
-    D3D12_GPU_VIRTUAL_ADDRESS cascadeShadowConstants = {};
+    D3D12_GPU_VIRTUAL_ADDRESS cascadeShadowConstants[2] = {};
+
+    D3D12_GPU_VIRTUAL_ADDRESS objectStructured = {};
+    D3D12_GPU_VIRTUAL_ADDRESS materialStructured = {};
+
+    Vertix::RenderResource* indirectCommandsBuffers[CASCADE_NUM] = {};
+    Vertix::RenderResource* indirectCountBuffer;
 
 private:
     RenderContext* renderContext;
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
+    Microsoft::WRL::ComPtr<ID3D12CommandSignature> commandSignature;
 
     CD3DX12_VIEWPORT viewport{};
     CD3DX12_RECT scissorRect{};

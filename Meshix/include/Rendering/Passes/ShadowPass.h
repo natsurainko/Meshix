@@ -22,9 +22,9 @@ public:
     Vertix::DescriptorView<Vertix::RenderResourceUsage::PixelShaderResource> shadowDepthSRV;
     Vertix::DescriptorView<Vertix::RenderResourceUsage::RenderTarget> shadowMaskRTV;
 
-    D3D12_GPU_VIRTUAL_ADDRESS frameConstants = {};
-    D3D12_GPU_VIRTUAL_ADDRESS lightConstants = {};
-    D3D12_GPU_VIRTUAL_ADDRESS cascadeShadowConstants = {};
+    D3D12_GPU_VIRTUAL_ADDRESS frameConstants[2] = {};
+    D3D12_GPU_VIRTUAL_ADDRESS lightConstants[2] = {};
+    D3D12_GPU_VIRTUAL_ADDRESS cascadeShadowConstants[2] = {};
 
 private:
     struct TextureHandles {

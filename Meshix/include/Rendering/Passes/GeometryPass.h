@@ -22,15 +22,22 @@ public:
     Vertix::DescriptorView<Vertix::RenderResourceUsage::RenderTarget> gORMRTV;
     Vertix::DescriptorView<Vertix::RenderResourceUsage::DepthWrite>   gDepthDSV;
 
-    D3D12_GPU_VIRTUAL_ADDRESS frameConstants = {};
+    D3D12_GPU_VIRTUAL_ADDRESS frameConstants[2] = {};
+
     D3D12_GPU_VIRTUAL_ADDRESS objectStructured = {};
     D3D12_GPU_VIRTUAL_ADDRESS materialStructured = {};
 
-    Vertix::RenderResource* indirectCommandsBuffer;
-    Vertix::RenderResource* visibleCountBuffer;
+    Vertix::RenderResource* indirectCommandsBuffers[1] = {};
+    Vertix::RenderResource* indirectCountBuffer;
 
 private:
     RenderContext* renderContext;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[3] = {
+        gNormalRTV.cpuHandle,
+        gAlbedoRTV.cpuHandle,
+        gORMRTV.cpuHandle,
+    };
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;

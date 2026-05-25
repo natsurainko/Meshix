@@ -20,8 +20,9 @@
 
 void MainWindow::BuildRenderPipeline() {
     const auto windowSize = GetWindowSize();
+    const auto frameCount = swapChain->GetFrameCount();
 
-    renderContext = std::make_unique<RenderContext>(graphicsDevice, frameCommandList);
+    renderContext = std::make_unique<RenderContext>(graphicsDevice, frameCommandList, swapChain);
     renderContext->SetWindowSize(windowSize);
 
     Vertix::RenderPipelineBuilder builder { graphicsDevice, frameCommandList };
@@ -51,16 +52,17 @@ void MainWindow::BuildRenderPipeline() {
         builder.Textures.Add("Shadow.Mask", CD3DX12_RESOURCE_DESC::Tex2D(
             DXGI_FORMAT_R16_FLOAT, VERTIX_VECTOR2D_EXPAND(windowSize)), D3D12_CLEAR_VALUE { .Format = DXGI_FORMAT_R16_FLOAT, .Color = { 1.0f } });
 
-        builder.Buffers.ConstantBuffer<FrameConstants>("Constants.Frame");
-        builder.Buffers.ConstantBuffer<LightConstants>("Constants.Light");
-        builder.Buffers.ConstantBuffer<CascadeShadowConstants>("Constants.CascadeShadow");
+        builder.Buffers.ConstantBufferArray<FrameConstants>("Constants.Frame", frameCount);
+        builder.Buffers.ConstantBufferArray<LightConstants>("Constants.Light", frameCount);
+        builder.Buffers.ConstantBufferArray<CascadeShadowConstants>("Constants.CascadeShadow", frameCount);
+        builder.Buffers.ConstantBufferArray<CullingViewConstants>("Constants.CullingView", frameCount);
 
-        builder.Buffers.StructuredBuffer<MeshCullingConstants>("Structured.MeshCulling", 65535);
-        builder.Buffers.StructuredBuffer<MeshIndirectCommand>("Structured.MeshIndirect", 65535);
-        builder.Buffers.StructuredBuffer<ObjectConstants>("Structured.Object", 4096);
+        builder.Buffers.StructuredBuffer<ObjectConstants>("Structured.Object", 8192);
         builder.Buffers.StructuredBuffer<MaterialConstants>("Structured.Material", 4096);
+        builder.Buffers.StructuredBuffer<MeshCullingConstants>("Structured.MeshCulling", 65535);
+        builder.Buffers.StructuredBufferArray<MeshIndirectCommand>("Structured.MeshIndirect", CULLING_VIEW_NUM, 65535);
 
-        builder.Buffers.Add("Typed.VisibleCount", CD3DX12_RESOURCE_DESC::Buffer(4));
+        builder.Buffers.Add("Typed.MeshIndirectCount", CD3DX12_RESOURCE_DESC::Buffer(4 * CULLING_VIEW_NUM));
 
         D3D12_DEPTH_STENCIL_VIEW_DESC gDepthDSVDesc {};
         gDepthDSVDesc.Format = DXGI_FORMAT_D32_FLOAT;
@@ -76,22 +78,23 @@ void MainWindow::BuildRenderPipeline() {
         const auto shadowDepthSRVDesc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2DArray(DXGI_FORMAT_R32_FLOAT, CASCADE_NUM, 1);
 
         builder.Passes.Add<CullingPass>([&](auto &pb) { pb
-            .ReadStructuredBuffer("Structured.MeshCulling", &CullingPass::meshCullingStructured)
-            .ReadStructuredBuffer("Structured.Object", &CullingPass::objectStructured)
-            .ReadStructuredBuffer("Structured.Material", &CullingPass::materialStructured)
-            .ReadConstantBuffer("Constants.Frame", &CullingPass::frameConstants)
-            .Write("Structured.MeshIndirect", &CullingPass::indirectCommandsUAV, CD3DX12_UNORDERED_ACCESS_VIEW_DESC::StructuredBuffer(65535, sizeof(MeshIndirectCommand)))
-            .Write("Structured.MeshIndirect", &CullingPass::indirectCommandsBuffer, Vertix::RenderResourceUsage::UnorderedAccess)
-            .Write("Typed.VisibleCount", &CullingPass::visibleCountUAV, CD3DX12_UNORDERED_ACCESS_VIEW_DESC::TypedBuffer(DXGI_FORMAT_R32_UINT, 1))
-            .Write("Typed.VisibleCount", &CullingPass::visibleCountBuffer, Vertix::RenderResourceUsage::UnorderedAccess);
+            .ReadArray("Constants.Frame", &CullingPass::frameConstants, Vertix::RenderResourceUsage::ConstantBuffer)
+            .ReadArray("Constants.CullingView", &CullingPass::cullingViewConstants, Vertix::RenderResourceUsage::ConstantBuffer)
+            .Read("Structured.MeshCulling", &CullingPass::meshCullingStructured, Vertix::RenderResourceUsage::StructuredBuffer)
+            .Read("Structured.Object", &CullingPass::objectStructured, Vertix::RenderResourceUsage::StructuredBuffer)
+            .Read("Structured.Material", &CullingPass::materialStructured, Vertix::RenderResourceUsage::StructuredBuffer)
+            .WriteArray("Structured.MeshIndirect", &CullingPass::indirectCommandsUAVs,
+                CD3DX12_UNORDERED_ACCESS_VIEW_DESC::StructuredBuffer(65535, sizeof(MeshIndirectCommand)))
+            .Write("Typed.MeshIndirectCount", &CullingPass::indirectCountUAV, CD3DX12_UNORDERED_ACCESS_VIEW_DESC::TypedBuffer(DXGI_FORMAT_R32_UINT, CULLING_VIEW_NUM))
+            .Write("Typed.MeshIndirectCount", &CullingPass::indirectCountBuffer, Vertix::RenderResourceUsage::UnorderedAccess);
         }, renderContext.get());
 
         builder.Passes.Add<GeometryPass>([&](auto &pb) { pb
-            .ReadConstantBuffer("Constants.Frame", &GeometryPass::frameConstants)
-            .ReadStructuredBuffer("Structured.Material", &GeometryPass::materialStructured)
-            .ReadStructuredBuffer("Structured.Object", &GeometryPass::objectStructured)
-            .Read("Structured.MeshIndirect", &GeometryPass::indirectCommandsBuffer, Vertix::RenderResourceUsage::IndirectArgumentRead)
-            .Read("Typed.VisibleCount", &GeometryPass::visibleCountBuffer, Vertix::RenderResourceUsage::IndirectArgumentRead)
+            .ReadArray("Constants.Frame", &GeometryPass::frameConstants, Vertix::RenderResourceUsage::ConstantBuffer)
+            .Read("Structured.Material", &GeometryPass::materialStructured, Vertix::RenderResourceUsage::StructuredBuffer)
+            .Read("Structured.Object", &GeometryPass::objectStructured, Vertix::RenderResourceUsage::StructuredBuffer)
+            .template ReadArray<0, 1>("Structured.MeshIndirect", &GeometryPass::indirectCommandsBuffers, Vertix::RenderResourceUsage::IndirectArgumentRead)
+            .Read("Typed.MeshIndirectCount", &GeometryPass::indirectCountBuffer, Vertix::RenderResourceUsage::IndirectArgumentRead)
             .Write("GBuffer.Normal", &GeometryPass::gNormalRTV)
             .Write("GBuffer.Albedo", &GeometryPass::gAlbedoRTV)
             .Write("GBuffer.OcclusionRoughnessMetallic", &GeometryPass::gORMRTV)
@@ -99,21 +102,25 @@ void MainWindow::BuildRenderPipeline() {
         }, renderContext.get());
 
         builder.Passes.Add<AmbientOcclusionPass>([&](auto &pb) { pb
-            .ReadConstantBuffer("Constants.Frame", &AmbientOcclusionPass::frameConstants)
+            .ReadArray("Constants.Frame", &AmbientOcclusionPass::frameConstants, Vertix::RenderResourceUsage::ConstantBuffer)
             .Read("GBuffer.Depth", &AmbientOcclusionPass::gDepthSRV, gDepthSRVDesc)
             .Read("GBuffer.Normal", &AmbientOcclusionPass::gNormalSRV)
             .Write("GBuffer.OcclusionRoughnessMetallic", &AmbientOcclusionPass::gORMRTV);
         }, renderContext.get());
 
         builder.Passes.Add<ShadowGeometryPass>([&] (auto &pb) { pb
-            .ReadConstantBuffer("Constants.CascadeShadow", &ShadowGeometryPass::cascadeShadowConstants)
+            .ReadArray("Constants.CascadeShadow", &ShadowGeometryPass::cascadeShadowConstants, Vertix::RenderResourceUsage::ConstantBuffer)
+            .Read("Structured.Material", &ShadowGeometryPass::materialStructured, Vertix::RenderResourceUsage::StructuredBuffer)
+            .Read("Structured.Object", &ShadowGeometryPass::objectStructured, Vertix::RenderResourceUsage::StructuredBuffer)
+            .template ReadArray<1, CASCADE_NUM>("Structured.MeshIndirect", &ShadowGeometryPass::indirectCommandsBuffers, Vertix::RenderResourceUsage::IndirectArgumentRead)
+            .Read("Typed.MeshIndirectCount", &ShadowGeometryPass::indirectCountBuffer, Vertix::RenderResourceUsage::IndirectArgumentRead)
             .Write("Shadow.Depth", &ShadowGeometryPass::shadowDepthDSV, shadowDepthDSVDesc);
         }, renderContext.get());
 
         builder.Passes.Add<ShadowPass>([&] (auto &pb) { pb
-            .ReadConstantBuffer("Constants.Frame", &ShadowPass::frameConstants)
-            .ReadConstantBuffer("Constants.Light", &ShadowPass::lightConstants)
-            .ReadConstantBuffer("Constants.CascadeShadow", &ShadowPass::cascadeShadowConstants)
+            .ReadArray("Constants.Frame", &ShadowPass::frameConstants, Vertix::RenderResourceUsage::ConstantBuffer)
+            .ReadArray("Constants.Light", &ShadowPass::lightConstants, Vertix::RenderResourceUsage::ConstantBuffer)
+            .ReadArray("Constants.CascadeShadow", &ShadowPass::cascadeShadowConstants, Vertix::RenderResourceUsage::ConstantBuffer)
             .Read("Shadow.Depth", &ShadowPass::shadowDepthSRV, shadowDepthSRVDesc)
             .Read("GBuffer.Normal", &ShadowPass::gNormalSRV)
             .Read("GBuffer.Depth", &ShadowPass::gDepthSRV, gDepthSRVDesc)
@@ -121,8 +128,8 @@ void MainWindow::BuildRenderPipeline() {
         }, renderContext.get());
 
         builder.Passes.Add<LightingPass>([&](auto &pb) { pb
-            .ReadConstantBuffer("Constants.Frame", &LightingPass::frameConstants)
-            .ReadConstantBuffer("Constants.Light", &LightingPass::lightConstants)
+            .ReadArray("Constants.Frame", &LightingPass::frameConstants, Vertix::RenderResourceUsage::ConstantBuffer)
+            .ReadArray("Constants.Light", &LightingPass::lightConstants, Vertix::RenderResourceUsage::ConstantBuffer)
             .Read("GBuffer.Normal", &LightingPass::gNormalSRV)
             .Read("GBuffer.Albedo", &LightingPass::gAlbedoSRV)
             .Read("GBuffer.OcclusionRoughnessMetallic", &LightingPass::gORMSRV)
@@ -139,14 +146,15 @@ void MainWindow::BuildRenderPipeline() {
     renderPipeline = builder.Build();
     renderContext->viewport     = renderPipeline->GetD3D12Viewport();
     renderContext->scissorRect  = renderPipeline->GetD3D12ScissorRect();
-    renderContext->frameConstantsBuffer         = renderPipeline->GetConstantBuffer<FrameConstants>("Constants.Frame");
-    renderContext->lightConstantsBuffer         = renderPipeline->GetConstantBuffer<LightConstants>("Constants.Light");
-    renderContext->cascadeShadowConstantsBuffer = renderPipeline->GetConstantBuffer<CascadeShadowConstants>("Constants.CascadeShadow");
+    renderPipeline->GetConstantBufferArray("Constants.Frame", renderContext->frameConstantsBuffer);
+    renderPipeline->GetConstantBufferArray("Constants.Light", renderContext->lightConstantsBuffer);
+    renderPipeline->GetConstantBufferArray("Constants.CullingView", renderContext->cullingViewConstantsBuffer);
+    renderPipeline->GetConstantBufferArray("Constants.CascadeShadow", renderContext->cascadeShadowConstantsBuffer);
     renderContext->materialStructuredBuffer    = renderPipeline->GetStructuredBuffer<MaterialConstants>("Structured.Material");
     renderContext->objectStructuredBuffer      = renderPipeline->GetStructuredBuffer<ObjectConstants>("Structured.Object");
     renderContext->meshCullingStructuredBuffer = renderPipeline->GetStructuredBuffer<MeshCullingConstants>("Structured.MeshCulling");
     renderContext->modelPool    = std::make_unique<Vertix::ModelPool>();
-    renderContext->objectPool   = std::make_unique<Vertix::ResourcePool<Vertix::Engine::SceneObject3D, ObjectHandle>>(4096);
+    renderContext->objectPool   = std::make_unique<Vertix::ResourcePool<Vertix::Engine::SceneObject3D, ObjectHandle>>(8192);
     renderContext->texturePool  = std::make_unique<Vertix::TexturePool>(renderContext->sharedDescriptorHeap->AllocateRange(2048));
     renderContext->materialPool = std::make_unique<Vertix::MaterialPool<MaterialConstants>>(renderContext->materialStructuredBuffer);
 }

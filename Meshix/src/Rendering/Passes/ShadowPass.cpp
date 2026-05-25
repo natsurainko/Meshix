@@ -73,12 +73,11 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     constexpr float clearColor[] = { 1.0f, 0.0f, 0.0f, 0.0f };
 
     shadowMaskRTV.Clear(commandList, clearColor);
-    return;
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetGraphicsRootConstantBufferView(0, lightConstants);
-    commandList->SetGraphicsRootConstantBufferView(1, cascadeShadowConstants);
-    commandList->SetGraphicsRootConstantBufferView(2, frameConstants);
+    commandList->SetGraphicsRootConstantBufferView(0, lightConstants[renderContext->GetCurrentFrameIndex()]);
+    commandList->SetGraphicsRootConstantBufferView(1, cascadeShadowConstants[renderContext->GetCurrentFrameIndex()]);
+    commandList->SetGraphicsRootConstantBufferView(2, frameConstants[renderContext->GetCurrentFrameIndex()]);
     commandList->SetGraphicsRoot32BitConstants(3, 3, &handles, 0);
 
     shadowMaskRTV.SetRenderTarget(commandList);

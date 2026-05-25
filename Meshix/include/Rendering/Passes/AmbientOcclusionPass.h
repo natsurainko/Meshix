@@ -21,7 +21,7 @@ public:
     Vertix::DescriptorView<Vertix::RenderResourceUsage::PixelShaderResource> gNormalSRV;
     Vertix::DescriptorView<Vertix::RenderResourceUsage::RenderTarget> gORMRTV;
 
-    D3D12_GPU_VIRTUAL_ADDRESS frameConstants = {};
+    D3D12_GPU_VIRTUAL_ADDRESS frameConstants[2] = {};
 
 private:
     struct TextureHandles {

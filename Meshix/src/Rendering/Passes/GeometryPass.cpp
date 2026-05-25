@@ -23,9 +23,9 @@ void GeometryPass::Initialize(ID3D12Device10* device) {
         staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
         CD3DX12_ROOT_PARAMETER rootParameters[5];
-        rootParameters[0].InitAsConstants(1, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
-        rootParameters[1].InitAsConstants(1, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-        rootParameters[2].InitAsConstantBufferView(2, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+        rootParameters[0].InitAsConstants(1, 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParameters[1].InitAsConstants(1, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+        rootParameters[2].InitAsConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
         rootParameters[3].InitAsShaderResourceView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
         rootParameters[4].InitAsShaderResourceView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 
@@ -105,57 +105,34 @@ void GeometryPass::Initialize(ID3D12Device10* device) {
 
         ThrowIfFailed(device->CreateCommandSignature(&desc, rootSignature.Get(), IID_PPV_ARGS(&commandSignature)));
     }
+
+    rtvHandles[0] = gNormalRTV.cpuHandle;
+    rtvHandles[1] = gAlbedoRTV.cpuHandle;
+    rtvHandles[2] = gORMRTV.cpuHandle;
 }
 
 void GeometryPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     constexpr float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetGraphicsRootConstantBufferView(2, frameConstants);
+    commandList->SetGraphicsRootConstantBufferView(2, frameConstants[renderContext->GetCurrentFrameIndex()]);
     commandList->SetGraphicsRootShaderResourceView(3, objectStructured);
     commandList->SetGraphicsRootShaderResourceView(4, materialStructured);
-
-    const D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[3] = {
-        gNormalRTV.cpuHandle,
-        gAlbedoRTV.cpuHandle,
-        gORMRTV.cpuHandle,
-    };
     commandList->OMSetRenderTargets(3, rtvHandles, FALSE, &gDepthDSV.cpuHandle);
 
     gNormalRTV.Clear(commandList, clearColor);
     gAlbedoRTV.Clear(commandList, clearColor);
     gORMRTV.Clear(commandList, clearColor);
-    gDepthDSV.ClearDepth(commandList, 1.0f);
+    gDepthDSV.ClearDepth(commandList);
 
     commandList->SetPipelineState(pipelineState.Get());
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
     commandList->ExecuteIndirect(
         commandSignature.Get(),
         65535,
-        indirectCommandsBuffer->GetResource(),
+        indirectCommandsBuffers[0]->GetResource(),
         0,
-        visibleCountBuffer->GetResource(),
+        indirectCountBuffer->GetResource(),
         0
     );
-
-    /*for (UINT i = 0; i < renderContext->sceneObjects.size(); ++i) {
-        const auto &sceneObject = renderContext->sceneObjects[i];
-        commandList->SetGraphicsRootConstantBufferView(1, renderContext->objectConstantsBuffer.GetGpuVirtualAddressAt(i));
-
-        for (const auto &mesh : sceneObject->SceneModel->Meshes) {
-            if (mesh.Material.slot) {
-                if (const auto material = renderContext->materialPool->GetAs<Vertix::Engine::DefaultPBRMaterial>(mesh.Material); material->alphaMode == 2) {
-                    // BLEND materials should skip the deferred rendering phase.
-                    // TODO: Add a Forward Rendering Pass to render transparent material meshes.
-                    continue;
-                }
-            }
-
-            commandList->SetGraphicsRoot32BitConstant(2, mesh.Material.slot, 0);
-            commandList->IASetVertexBuffers(0, 1, &mesh.VertexBuffer->d3d12VertexBufferView);
-            commandList->IASetIndexBuffer(&mesh.IndexBuffer->d3d12IndexBufferView);
-            commandList->DrawIndexedInstanced(mesh.IndexBuffer->indexCount, 1, 0, 0, 0);
-        }
-    }*/
 }

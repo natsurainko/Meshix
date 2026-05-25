@@ -17,16 +17,17 @@ public:
     void Initialize(ID3D12Device10* device) override;
     void Execute(ID3D12GraphicsCommandList5* commandList) override;
 
-    D3D12_GPU_VIRTUAL_ADDRESS frameConstants = {};
+    D3D12_GPU_VIRTUAL_ADDRESS frameConstants[2] = {};
+    D3D12_GPU_VIRTUAL_ADDRESS cullingViewConstants[2] = {};
+
     D3D12_GPU_VIRTUAL_ADDRESS materialStructured = {};
-    D3D12_GPU_VIRTUAL_ADDRESS meshCullingStructured = {};
     D3D12_GPU_VIRTUAL_ADDRESS objectStructured = {};
+    D3D12_GPU_VIRTUAL_ADDRESS meshCullingStructured = {};
 
-    Vertix::DescriptorView<Vertix::RenderResourceUsage::UnorderedAccess> indirectCommandsUAV;
-    Vertix::DescriptorView<Vertix::RenderResourceUsage::UnorderedAccess> visibleCountUAV;
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::UnorderedAccess> indirectCommandsUAVs[CULLING_VIEW_NUM];
+    Vertix::DescriptorView<Vertix::RenderResourceUsage::UnorderedAccess> indirectCountUAV;
 
-    Vertix::RenderResource* indirectCommandsBuffer = nullptr;
-    Vertix::RenderResource* visibleCountBuffer = nullptr;
+    Vertix::RenderResource* indirectCountBuffer = nullptr;
 
 private:
     RenderContext* renderContext;
@@ -35,7 +36,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> uavStagingHeap;
-
     D3D12_CPU_DESCRIPTOR_HANDLE uavStagingHandle = {};
 };
 

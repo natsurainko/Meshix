@@ -8,7 +8,7 @@
 #include <memory>
 #include <Vertix.Engine/Camera/PerspectiveCamera.h>
 #include <Vertix/Graphics/DescriptorHeap.h>
-#include <Vertix/Graphics/Buffers/ConstantBufferPageArray.hpp>
+#include <Vertix/Graphics/SwapChain.h>
 #include <Vertix/Rendering/Buffers/ConstantBuffer.hpp>
 #include <Vertix.Engine/Helpers/MathHelper.h>
 #include <Vertix.Engine/Helpers/VectorHelper.h>
@@ -35,7 +35,8 @@ class RenderContext {
 public:
     explicit RenderContext(
         Vertix::GraphicsDevice* graphicsDevice,
-        Vertix::FrameCommandList* frameCommandList) : graphicsDevice(graphicsDevice)
+        Vertix::FrameCommandList* frameCommandList,
+        Vertix::SwapChain* swapChain) : graphicsDevice(graphicsDevice), swapChain(swapChain)
     {
         Vertix::ResourceUploadHeap resourceUploadHeap {};
         frameCommandList->BeginCommand(nullptr);
@@ -53,6 +54,11 @@ public:
         frameConstants.NearFarProjScale.x = cameraNearPlane;
         frameConstants.NearFarProjScale.y = cameraFarPlane;
 
+        for (uint32_t i = 0; i < CULLING_VIEW_NUM; ++i) {
+            cullingViewConstants.CullingViewDatas[i].MaxCommandCount = 65535;
+            if (i) cullingViewConstants.CullingViewDatas[i].CullSkipMask = 1 << 4;
+        }
+
         currentCullingConstantsIndex = 0;
     }
 
@@ -62,9 +68,11 @@ public:
 
     std::unique_ptr<Vertix::VertexBuffer> fullScreenVertex;
 
-    Vertix::ConstantBuffer<FrameConstants>* frameConstantsBuffer = nullptr;
-    Vertix::ConstantBuffer<LightConstants>* lightConstantsBuffer = nullptr;
-    Vertix::ConstantBuffer<CascadeShadowConstants>* cascadeShadowConstantsBuffer = nullptr;
+    // Created on UploadHeap, double(=SwapChain FrameCount) buffering is required.
+    Vertix::ConstantBuffer<FrameConstants>* frameConstantsBuffer[2] = {};
+    Vertix::ConstantBuffer<LightConstants>* lightConstantsBuffer[2] = {};
+    Vertix::ConstantBuffer<CullingViewConstants>* cullingViewConstantsBuffer[2] = {};
+    Vertix::ConstantBuffer<CascadeShadowConstants>* cascadeShadowConstantsBuffer[2] = {};
 
     Vertix::StructuredBuffer<MaterialConstants>* materialStructuredBuffer = nullptr;
     Vertix::StructuredBuffer<ObjectConstants>* objectStructuredBuffer = nullptr;
@@ -78,16 +86,23 @@ public:
 
     Vertix::Vector2D<UINT> windowSize;
 
+    void PrepareMeshIndirectBufferHandles(Vertix::DescriptorView<Vertix::RenderResourceUsage::UnorderedAccess> handles[CULLING_VIEW_NUM]) noexcept {
+        for (uint32_t i = 0; i < CULLING_VIEW_NUM; ++i) {
+            cullingViewConstants.CullingViewDatas[i].IndirectCommandBufferHandle = handles[i].slot;
+        }
+    }
+
     void OnFrameUpdate() {
+        const auto frameIndex = GetCurrentFrameIndex();
+
         perspectiveCamera.GetViewMatrix(frameConstants.View);
         frameConstants.ViewProjection = frameConstants.View * frameConstants.Projection;
         frameConstants.ViewProjection.Invert(frameConstants.ViewProjectionInverse);
         Vertix::Engine::FillVector4(frameConstants.CameraPosition, perspectiveCamera.GetPosition());
-        Vertix::Engine::ExtractFrustumPlanes(frameConstants.ViewProjection, frameConstants.FrustumPlanes);
-        frameConstantsBuffer->Fill(frameConstants);
+        frameConstantsBuffer[frameIndex]->Fill(frameConstants);
 
         lightConstants.LightDirection.Normalize(lightConstants.LightDirection);
-        lightConstantsBuffer->Fill(lightConstants);
+        lightConstantsBuffer[frameIndex]->Fill(lightConstants);
 
         Vertix::Engine::SetupCascades<CASCADE_NUM>(
             cascadeShadowConstants.CascadeDatas,
@@ -97,7 +112,20 @@ public:
             lightConstants.LightDirection,
             static_cast<float>(ShadowMapSize)
         );
-        cascadeShadowConstantsBuffer->Fill(cascadeShadowConstants);
+        cascadeShadowConstantsBuffer[frameIndex]->Fill(cascadeShadowConstants);
+
+        cullingViewConstants.MeshCount = currentCullingConstantsIndex;
+        Vertix::Engine::ExtractFrustumPlanes(
+            frameConstants.ViewProjection,
+            cullingViewConstants.CullingViewDatas[0].FrustumPlanes
+        );
+        for (uint i = 0; i < CASCADE_NUM; ++i) {
+            Vertix::Engine::ExtractFrustumPlanes(
+                cascadeShadowConstants.CascadeDatas[i].LightViewProjection,
+                cullingViewConstants.CullingViewDatas[1 + i].FrustumPlanes
+            );
+        }
+        cullingViewConstantsBuffer[frameIndex]->Fill(cullingViewConstants);
     }
 
     void AddSceneObject(std::unique_ptr<Vertix::Engine::SceneObject3D> sceneObject) {
@@ -139,7 +167,7 @@ public:
         currentCullingConstantsIndex += count;
     }
 
-    void SetWindowSize(const Vertix::Vector2D<UINT> &size) {
+    void SetWindowSize(const Vertix::Vector2D<UINT> &size) noexcept {
         windowSize = size;
 
         frameConstants.FrameResolution.x = static_cast<float>(windowSize.X);
@@ -154,20 +182,16 @@ public:
         frameConstants.NearFarProjScale.w = frameConstants.Projection._22;
     }
 
-    [[nodiscard]]
-    Vertix::Engine::PerspectiveCamera* GetPerspectiveCamera() {
-        return &perspectiveCamera;
-    }
-
-    [[nodiscard]]
-    const uint32_t& GetMeshCount() const noexcept {
-        return currentCullingConstantsIndex;
-    }
+    [[nodiscard]] Vertix::Engine::PerspectiveCamera* GetPerspectiveCamera() noexcept { return &perspectiveCamera; }
+    [[nodiscard]] uint32_t GetCurrentFrameIndex() const noexcept { return swapChain->GetCurrentFrameIndex(); }
+    [[nodiscard]] uint32_t GetMeshCount() const noexcept { return currentCullingConstantsIndex; }
 
 private:
     Vertix::GraphicsDevice* graphicsDevice = nullptr;
+    Vertix::SwapChain*      swapChain = nullptr;
 
-    FrameConstants frameConstants = {};
+    FrameConstants         frameConstants = {};
+    CullingViewConstants   cullingViewConstants = {};
     CascadeShadowConstants cascadeShadowConstants = {};
 
     uint32_t currentCullingConstantsIndex;

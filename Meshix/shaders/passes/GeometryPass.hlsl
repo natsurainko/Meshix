@@ -1,18 +1,14 @@
 #include "../structures.h"
 
-cbuffer Shared : register(b0) {
-    uint MaterialHandle;
-}
-
 // ====================================================
 //                    Vertex Shader
 // ====================================================
 
-cbuffer VS : register(b1) {
+cbuffer VS : register(b0) {
     uint ObjectHandle;
 }
 
-ConstantBuffer<FrameConstants> frameConstants  : register(b2);
+ConstantBuffer<FrameConstants> frameConstants  : register(b1);
 
 StructuredBuffer<ObjectConstants> objectConstants : register(t0);
 
@@ -47,6 +43,10 @@ VSOutput VSMain(VSInput vsInput) {
 //                    Pixel Shader
 // ====================================================
 
+cbuffer PS : register(b0) {
+    uint MaterialHandle;
+}
+
 SamplerState AnisotropicSampler : register(s0);
 
 StructuredBuffer<MaterialConstants> materialConstants : register(t0);
@@ -72,7 +72,7 @@ PSOutput PSMain(VSOutput psInput) {
     float3 normal    = psInput.FragNormal;
     float4 baseColor = float4(1.0, 1.0, 1.0, 1.0);
     float  metallic  = 0;
-    float  roughness = 0.5;
+    float  roughness = 0.25;
     float  occlusion = 1.0;
 
     if (MaterialHandle) {

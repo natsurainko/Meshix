@@ -70,8 +70,8 @@ void LightingPass::Execute(ID3D12GraphicsCommandList5* commandList) {
     constexpr float clearColor[] = { 0.3921f, 0.5843f, 0.9294f, 1.0f };
 
     commandList->SetGraphicsRootSignature(rootSignature.Get());
-    commandList->SetGraphicsRootConstantBufferView(0, frameConstants);
-    commandList->SetGraphicsRootConstantBufferView(1, lightConstants);
+    commandList->SetGraphicsRootConstantBufferView(0, frameConstants[renderContext->GetCurrentFrameIndex()]);
+    commandList->SetGraphicsRootConstantBufferView(1, lightConstants[renderContext->GetCurrentFrameIndex()]);
     commandList->SetGraphicsRoot32BitConstants(2, 5, &handles, 0);
 
     currentFrameRTV.SetRenderTarget(commandList);

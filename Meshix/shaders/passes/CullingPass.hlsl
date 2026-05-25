@@ -4,71 +4,74 @@
 
 #include "../structures.h"
 
-ConstantBuffer<FrameConstants> frameConstants  : register(b0);
-
-cbuffer constants : register(b1) {
-    uint MeshCount;
-}
+ConstantBuffer<FrameConstants>       frameConstants       : register(b0);
+ConstantBuffer<CullingViewConstants> cullingViewConstants : register(b1);
 
 StructuredBuffer<MaterialConstants>    materialConstants    : register(t0);
 StructuredBuffer<ObjectConstants>      objectConstants      : register(t1);
 StructuredBuffer<MeshCullingConstants> meshCullingConstants : register(t2);
 
-RWStructuredBuffer<MeshIndirectCommand> indirectCommands    : register(u0);
-RWBuffer<uint>                          visibleCount        : register(u1);
+RWBuffer<uint> meshIndirectCount : register(u0);
 
-bool CullAABB(
-    BoundingBox localBox,
-    float4x4 world,
-    float4 planes[6])
+bool CullAABBWorld(
+    float3 worldCenter,
+    float3 worldExtents,
+    float4 planes[6],
+    uint skipMask)
 {
-    float3 worldCenter = mul(world, float4(localBox.Center, 1.0)).xyz;
-    float3 worldExtents =
-        abs(localBox.Extents.x * float3(world._11, world._21, world._31)) +
-        abs(localBox.Extents.y * float3(world._12, world._22, world._32)) +
-        abs(localBox.Extents.z * float3(world._13, world._23, world._33));
-
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 6; i++) {
+        if (skipMask & (1u << i)) continue;
         float r = dot(worldExtents, abs(planes[i].xyz));
         float s = dot(worldCenter, planes[i].xyz) + planes[i].w;
-        if (s + r < 0.0) return true;
+        if (s + r < -0.001) return true;
     }
-
     return false;
 }
 
 [numthreads(64, 1, 1)]
 void CSMain(uint3 threadId : SV_DispatchThreadID) {
     uint meshIndex = threadId.x;
-    if (meshIndex >= MeshCount) return;
+    if (meshIndex >= cullingViewConstants.MeshCount) return;
 
-    MeshCullingConstants cullingMesh = meshCullingConstants[meshIndex];
-    MaterialConstants material = materialConstants[cullingMesh.MaterialHandle];
-    if (material.alphaMode == 2) return;
+    MeshCullingConstants mesh     = meshCullingConstants[meshIndex]; if (!mesh.ObjectHandle) return;
+    MaterialConstants    material = materialConstants[mesh.MaterialHandle]; if (material.alphaMode == 2) return;
+    ObjectConstants      object   = objectConstants[mesh.ObjectHandle - 1];
 
-    if (!cullingMesh.ObjectHandle) return;
-    ObjectConstants object = objectConstants[cullingMesh.ObjectHandle - 1];
-    if (CullAABB(cullingMesh.LocalBounds, object.World, frameConstants.FrustumPlanes)) return;
+    float3 worldCenter = mul(object.World, float4(mesh.LocalBounds.Center, 1.0)).xyz;
+    float3 worldExtents =
+        abs(mesh.LocalBounds.Extents.x * float3(object.World._11, object.World._21, object.World._31)) +
+        abs(mesh.LocalBounds.Extents.y * float3(object.World._12, object.World._22, object.World._32)) +
+        abs(mesh.LocalBounds.Extents.z * float3(object.World._13, object.World._23, object.World._33));
 
-    MeshIndirectCommand indirectCommand = (MeshIndirectCommand)0;
-    indirectCommand.VBAddress = cullingMesh.VertexBufferAddress;
-    indirectCommand.VBSize    = 56 * cullingMesh.VertexCount;
-    indirectCommand.VBStride  = 56;
+    for (uint i = 0; i < CULLING_VIEW_NUM; ++i) {
+        CullingViewData viewData = cullingViewConstants.CullingViewDatas[i];
+        if (CullAABBWorld(worldCenter, worldExtents, viewData.FrustumPlanes, viewData.CullSkipMask)) continue;
 
-    indirectCommand.IBAddress = cullingMesh.IndexBufferAddress;
-    indirectCommand.IBSize    = 4 * cullingMesh.IndexCount;
-    indirectCommand.IBFormat  = 42; // DXGI_FORMAT_R32_UINT
+        uint slot;
+        InterlockedAdd(meshIndirectCount[i], 1, slot);
+        if (slot < viewData.MaxCommandCount) {
+            MeshIndirectCommand indirectCommand;
+            indirectCommand.MaterialHandle = mesh.MaterialHandle;
+            indirectCommand.ObjectHandle   = mesh.ObjectHandle - 1;
 
-    indirectCommand.IndexCountPerInstance = cullingMesh.IndexCount;
-    indirectCommand.InstanceCount = 1;
-    indirectCommand.StartIndexLocation = 0;
-    indirectCommand.BaseVertexLocation = 0;
-    indirectCommand.StartInstanceLocation = 0;
+            indirectCommand.VBAddress = mesh.VertexBufferAddress;
+            indirectCommand.VBSize    = 56 * mesh.VertexCount;
+            indirectCommand.VBStride  = 56;
 
-    indirectCommand.ObjectHandle = cullingMesh.ObjectHandle - 1;
-    indirectCommand.MaterialHandle = cullingMesh.MaterialHandle;
+            indirectCommand.IBAddress = mesh.IndexBufferAddress;
+            indirectCommand.IBSize    = 4 * mesh.IndexCount;
+            indirectCommand.IBFormat  = 42; // DXGI_FORMAT_R32_UINT
 
-    uint slot;
-    InterlockedAdd(visibleCount[0], 1, slot);
-    indirectCommands[slot] = indirectCommand;
+            indirectCommand.IndexCountPerInstance = mesh.IndexCount;
+            indirectCommand.InstanceCount = 1;
+            indirectCommand.StartIndexLocation = 0;
+            indirectCommand.BaseVertexLocation = 0;
+            indirectCommand.StartInstanceLocation = 0;
+
+            indirectCommand.Padding1 = 0;
+
+            RWStructuredBuffer<MeshIndirectCommand> cmdBuf = ResourceDescriptorHeap[NonUniformResourceIndex(viewData.IndirectCommandBufferHandle)];
+            cmdBuf[slot] = indirectCommand;
+        }
+    }
 }

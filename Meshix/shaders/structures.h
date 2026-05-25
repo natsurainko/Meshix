@@ -4,6 +4,7 @@
 #include "chlsl.h"
 
 #define CASCADE_NUM 5
+#define CULLING_VIEW_NUM (1 + CASCADE_NUM)
 
 #ifndef __cplusplus
 #include "csm.h"
@@ -48,6 +49,15 @@ struct BoundingBox {
     float  Padding_2;
 };
 
+struct CullingViewData {
+    float4 FrustumPlanes[6]; // Left / Right / Bottom / Top / Near / Far
+
+    uint IndirectCommandBufferHandle;
+    uint MaxCommandCount;
+    uint CullSkipMask;
+    uint Padding;
+};
+
 struct FrameConstants {
     float4x4 View                  IDENTITY;
     float4x4 Projection            IDENTITY;
@@ -60,8 +70,6 @@ struct FrameConstants {
 
     float2 FrameResolution;
     float2 FrameResolutionInverse;
-
-    float4 FrustumPlanes[6]; // Left / Right / Bottom / Top / Near / Far
 };
 
 struct LightConstants {
@@ -82,12 +90,10 @@ struct ObjectConstants {
 };
 
 struct CullingViewConstants {
-    float4 FrustumPlanes[6];
+    CullingViewData CullingViewDatas[CULLING_VIEW_NUM];
 
-    uint IndirectCommandBufferHandle;
-    uint VisibleCountBufferHandle;
-    uint MaxCommandCount;
-    uint Padding;
+    uint MeshCount;
+    float3 Padding;
 };
 
 struct MeshCullingConstants {
