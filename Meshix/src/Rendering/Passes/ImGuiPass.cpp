@@ -132,11 +132,12 @@ void ImGuiPass::Execute(ID3D12GraphicsCommandList5* commandList) {
             ImGui::Begin("Shader", &guiContext.windowShaderVisible);
 
             if (ImGui::CollapsingHeader("Lighting")) {
+                auto &[LightDirection, AmbientIntensity, LightColor, LightIntensity] = renderContext->RefLightConstants();
                 ImGui::SeparatorText("Directional Light");
-                ImGui::SliderFloat3("Direction", reinterpret_cast<float*>(&renderContext->lightConstants.LightDirection), 1.0f, -1.0f, "%.3f");
-                ImGui::ColorEdit3("Light Color", reinterpret_cast<float*>(&renderContext->lightConstants.LightColor));
-                ImGui::SliderFloat("Light Intensity", &renderContext->lightConstants.LightIntensity, 0.0f, 25.0f, "%.3f");
-                ImGui::SliderFloat("Ambient Intensity", &renderContext->lightConstants.AmbientIntensity, 0.0f, 1.0f, "%.3f");
+                ImGui::SliderFloat3("Direction", reinterpret_cast<float*>(&LightDirection), 1.0f, -1.0f, "%.3f");
+                ImGui::ColorEdit3("Light Color", reinterpret_cast<float*>(&LightColor));
+                ImGui::SliderFloat("Light Intensity", &LightIntensity, 0.0f, 25.0f, "%.3f");
+                ImGui::SliderFloat("Ambient Intensity", &AmbientIntensity, 0.0f, 1.0f, "%.3f");
             }
 
             ImGui::Checkbox("##shadow_enabled", &guiContext.enableShadowEffect);

@@ -113,8 +113,6 @@ float4 PSMain(VSOutput psInput) : SV_TARGET0 {
 
     // ACES Filmic Tone Mapping
     color = ACESFilmic(color);
-
-    // using sRGB rtvs to skip gamma correct
     color = pow(color, gammaCorrection);
 
     return float4(color, 1.0);

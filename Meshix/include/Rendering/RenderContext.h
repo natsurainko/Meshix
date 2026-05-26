@@ -12,7 +12,6 @@
 #include <Vertix/Rendering/Buffers/ConstantBuffer.hpp>
 #include <Vertix.Engine/Helpers/MathHelper.h>
 #include <Vertix.Engine/Helpers/VectorHelper.h>
-#include <Vertix.Engine/Pool/DefaultMaterialPool.hpp>
 #include <Vertix.Engine/Scene/SceneObject3D.hpp>
 #include <Vertix/Graphics/FrameCommandList.h>
 #include <Vertix/Math/Vector2D.hpp>
@@ -20,6 +19,8 @@
 #include <Vertix/Pool/TexturePool.hpp>
 
 #include "../shaders/structures.h"
+#include "Vertix/Pool/MaterialPool.hpp"
+#include "Vertix/Rendering/Buffers/StructuredBuffer.hpp"
 
 #define SHADER_BYTECODE(T) CD3DX12_SHADER_BYTECODE(T, sizeof(T))
 
@@ -48,8 +49,8 @@ public:
         graphicsDevice->CreateCommandQueue(computeCommandQueue, { .Type = D3D12_COMMAND_LIST_TYPE_COMPUTE, .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE });
         sharedDirectCommandList = std::make_unique<Vertix::GraphicsCommandList>(graphicsDevice->GetD3D12Device(), frameCommandList->GetD3D12CommandQueue(), D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-        perspectiveCamera.SetPosition({ -8.80743f, 1.59221947f, -0.85825783f });
-        perspectiveCamera.SetOrientation({ 0.0622985959f, -0.766231537f, 0.07516095f, 0.635105431f });
+        perspectiveCamera.SetPosition({ 31.548f, 7.229f, 46.704f });
+        perspectiveCamera.SetOrientation({ -0.047f, -0.579f, -0.033f, 0.813f });
 
         frameConstants.NearFarProjScale.x = cameraNearPlane;
         frameConstants.NearFarProjScale.y = cameraFarPlane;
@@ -58,6 +59,13 @@ public:
             cullingViewConstants.CullingViewDatas[i].MaxCommandCount = 65535;
             if (i) cullingViewConstants.CullingViewDatas[i].CullSkipMask = 1 << 4;
         }
+
+        lightConstants = {
+            .LightDirection   = { 0.3f, -0.925f, -0.225f },
+            .AmbientIntensity = 0.2f,
+            .LightColor       = { 1.0f, 1.0f, 1.0f },
+            .LightIntensity   = 10.0f,
+        };
 
         currentCullingConstantsIndex = 0;
     }
@@ -134,6 +142,7 @@ public:
 
         std::vector<MeshCullingConstants> meshCullingConstants;
         for (const auto &mesh : object->SceneModel->Meshes) {
+            if (!mesh.IndexBuffer || !mesh.VertexBuffer) continue;
             meshCullingConstants.emplace_back(MeshCullingConstants {
                 .ObjectHandle = handle.slot,
                 .MaterialHandle = mesh.Material.slot,
@@ -157,7 +166,9 @@ public:
         {
             const auto copyCommandList = sharedDirectCommandList->GetD3D12GraphicsCommandList().Get();
             objectStructuredBuffer->Fill(copyCommandList, handle.slot - 1, objectConstants);
-            meshCullingStructuredBuffer->FillRange(copyCommandList, currentCullingConstantsIndex, meshCullingConstants);
+            if (!meshCullingConstants.empty()) {
+                meshCullingStructuredBuffer->FillRange(copyCommandList, currentCullingConstantsIndex, meshCullingConstants);
+            }
         }
         sharedDirectCommandList->EndCommand();
         sharedDirectCommandList->WaitForCommand();
@@ -185,19 +196,8 @@ public:
     [[nodiscard]] Vertix::Engine::PerspectiveCamera* GetPerspectiveCamera() noexcept { return &perspectiveCamera; }
     [[nodiscard]] uint32_t GetCurrentFrameIndex() const noexcept { return swapChain->GetCurrentFrameIndex(); }
     [[nodiscard]] uint32_t GetMeshCount() const noexcept { return currentCullingConstantsIndex; }
+    [[nodiscard]] LightConstants& RefLightConstants() noexcept { return lightConstants; }
 
-private:
-    Vertix::GraphicsDevice* graphicsDevice = nullptr;
-    Vertix::SwapChain*      swapChain = nullptr;
-
-    FrameConstants         frameConstants = {};
-    CullingViewConstants   cullingViewConstants = {};
-    CascadeShadowConstants cascadeShadowConstants = {};
-
-    uint32_t currentCullingConstantsIndex;
-    std::vector<MeshCullingConstantsRange> meshCullingConstantsRange;
-
-public:
     const uint32_t ShadowMapSize = 2048;
     const float cameraNearPlane = 0.1f;
     const float cameraFarPlane = 100.0f;
@@ -205,13 +205,24 @@ public:
     const D3D12_RECT* scissorRect = nullptr;
     const D3D12_VIEWPORT* viewport = nullptr;
 
-    LightConstants lightConstants {
-        .LightDirection = float3 { 0.3f, -0.925f, -0.225f },
-        .AmbientIntensity = 0.05f,
-        .LightColor = float3 { 1.0f, 1.0f, 1.0f },
-        .LightIntensity = 7.0f,
+private:
+    Vertix::GraphicsDevice* graphicsDevice = nullptr;
+    Vertix::SwapChain*      swapChain = nullptr;
+
+    FrameConstants         frameConstants = {};
+    LightConstants         lightConstants = {};
+    CullingViewConstants   cullingViewConstants = {};
+    CascadeShadowConstants cascadeShadowConstants = {};
+
+    uint32_t currentCullingConstantsIndex;
+    std::vector<MeshCullingConstantsRange> meshCullingConstantsRange;
+
+    Vertix::Engine::PerspectiveCamera perspectiveCamera = {
+        4.0f / 3.0f,
+        Vertix::Engine::DegreesToRadians(60),
+        cameraNearPlane,
+        cameraFarPlane
     };
-    Vertix::Engine::PerspectiveCamera perspectiveCamera{4.0f / 3.0f, Vertix::Engine::DegreesToRadians(60), cameraNearPlane, cameraFarPlane};
 };
 
 #endif //MESHIX_RENDER_CONTEXT_H
